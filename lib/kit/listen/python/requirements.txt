@@ -1,0 +1,22 @@
+# Install into a Python 3.11 or 3.12 virtualenv.
+# Python 3.14 is often unsupported by torch/whisperx/ctranslate2.
+#
+# Example:
+#   python3.12 -m venv .venv
+#   source .venv/bin/activate
+#   pip install -U pip
+#   pip install -r python/requirements.txt
+#
+# You also need ffmpeg on PATH.
+# Accept pyannote model terms on Hugging Face and export HF_TOKEN.
+#
+# Pins keep torch / numpy / transformers compatible. Unpinned installs often
+# pull NumPy 2.x + transformers 5.x, which break torch 2.2 / WhisperX 3.3.
+
+torch==2.2.2
+torchaudio==2.2.2
+numpy>=1.26.4,<2
+transformers>=4.42.0,<5
+whisperx==3.3.1
+pyannote.audio==3.3.2
+matplotlib>=3.8,<4

@@ -7,4 +7,5 @@ module Kit
 end
 
 require_relative "kit/notifications"
+require_relative "kit/listen"
 require_relative "kit/cli"

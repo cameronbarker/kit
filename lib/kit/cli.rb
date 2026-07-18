@@ -3,7 +3,6 @@
 module Kit
   class CLI
     PLANNED_COMMANDS = {
-      "listen" => "Record and transcribe conversations",
       "notice" => "Extract commitments, decisions, risks, and open loops",
       "remember" => "Write reviewed items into Obsidian/PARA",
       "surface" => "Show what needs attention now",
@@ -15,6 +14,7 @@ module Kit
     }.freeze
 
     IMPLEMENTED_COMMANDS = {
+      "listen" => "Record and transcribe conversations",
       "notify" => "Send a simple local Kit notification"
     }.freeze
 
@@ -40,6 +40,8 @@ module Kit
         0
       when "notify"
         run_notify
+      when "listen"
+        Listen::CLI.run(@argv)
       when *PLANNED_COMMANDS.keys
         print_planned(command)
         2

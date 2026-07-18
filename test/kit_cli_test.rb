@@ -15,6 +15,7 @@ class KitCLITest < Minitest::Test
     assert_includes result[:stdout], "kit 0.1.0"
     assert_includes result[:stdout], "listen -> notice -> remember -> surface"
     assert_includes result[:stdout], "notify"
+    assert_includes result[:stdout], "listen"
     assert_includes result[:stdout], "remember"
     assert_empty result[:stderr]
   end
@@ -62,11 +63,12 @@ class KitCLITest < Minitest::Test
     assert_empty result[:stderr]
   end
 
-  def test_listen_is_not_passthrough_yet
-    result = run_kit("listen")
+  def test_listen_is_implemented_subcommand
+    result = run_kit("listen", "version")
 
-    assert_equal 2, result[:status]
-    assert_includes result[:stderr], "kit listen is planned but not implemented yet."
+    assert_equal 0, result[:status]
+    assert_equal "kit listen 0.1.0\n", result[:stdout]
+    assert_empty result[:stderr]
   end
 
   def test_unknown_command_fails

@@ -1,1 +1,5 @@
-Listen/
+/Listen/
+recordings/
+transcripts/
+.cache/
+.venv/

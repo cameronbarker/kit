@@ -19,6 +19,13 @@ Run the CLI from the repository root:
 ```bash
 bin/kit help
 bin/kit version
+bin/kit notify "Review open commitments"
+```
+
+Install runtime dependencies on a Mac with:
+
+```bash
+./install.sh
 ```
 
 The current help output describes the intended workflow:
@@ -30,6 +37,7 @@ listen -> notice -> remember -> surface -> prepare/brief/followup -> reflect
 ## Commands
 
 ```text
+notify      Send a simple local Kit notification
 listen      Record and transcribe conversations
 notice      Extract commitments, decisions, risks, and open loops
 remember    Write reviewed items into Obsidian/PARA
@@ -41,17 +49,17 @@ reflect     Review patterns over time
 qmd         Manage/search the local qmd index
 ```
 
-Planned commands currently return an intentional "not implemented yet" message.
+The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier`. Other planned commands currently return an intentional "not implemented yet" message.
 
 ## Development
 
 Run the CLI test suite with:
 
 ```bash
-ruby test/kit_cli_test.rb
+ruby -Itest -e 'Dir["test/*_test.rb"].sort.each { |path| require_relative path }'
 ```
 
-No external dependencies are required for the current CLI skeleton beyond Ruby and its standard library.
+No external gems are required. Automated tests do not send real notifications.
 
 ## Project Notes
 

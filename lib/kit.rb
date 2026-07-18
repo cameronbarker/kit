@@ -6,4 +6,5 @@ module Kit
   class Error < StandardError; end
 end
 
+require_relative "kit/notifications"
 require_relative "kit/cli"

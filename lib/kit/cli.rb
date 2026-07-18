@@ -14,6 +14,10 @@ module Kit
       "qmd" => "Manage/search the local qmd index"
     }.freeze
 
+    IMPLEMENTED_COMMANDS = {
+      "notify" => "Send a simple local Kit notification"
+    }.freeze
+
     def self.run(argv)
       new(argv).run
     end
@@ -34,6 +38,8 @@ module Kit
       when "version", "-v", "--version"
         @out.puts "kit #{VERSION}"
         0
+      when "notify"
+        run_notify
       when *PLANNED_COMMANDS.keys
         print_planned(command)
         2
@@ -71,6 +77,9 @@ module Kit
     end
 
     def print_commands(io)
+      IMPLEMENTED_COMMANDS.each do |name, description|
+        io.puts "  #{name.ljust(11)} #{description}"
+      end
       PLANNED_COMMANDS.each do |name, description|
         io.puts "  #{name.ljust(11)} #{description}"
       end
@@ -80,6 +89,26 @@ module Kit
       @err.puts "kit #{command} is planned but not implemented yet."
       @err.puts PLANNED_COMMANDS.fetch(command)
       @err.puts "Run `kit help` to see the full command surface."
+    end
+
+    def run_notify
+      message = @argv.join(" ").strip
+      raise Error, "missing MESSAGE" if message.empty?
+
+      backend = notify_dry_run? ? Notifications::NullBackend.new : Notifications::TerminalNotifierBackend.new
+      result = Notifications.deliver(title: "Kit", message: message, backend: backend)
+      @out.puts result.command.join(" ") if result.dry_run
+      return 0 if result.success?
+
+      @err.puts "Error: #{result.error}"
+      1
+    rescue Error => e
+      @err.puts "Error: #{e.message}"
+      1
+    end
+
+    def notify_dry_run?
+      ENV.fetch("KIT_NOTIFY_DRY_RUN", "") == "1"
     end
   end
 end

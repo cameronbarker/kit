@@ -14,6 +14,7 @@ class KitCLITest < Minitest::Test
     assert_equal 0, result[:status]
     assert_includes result[:stdout], "kit 0.1.0"
     assert_includes result[:stdout], "listen -> notice -> remember -> surface"
+    assert_includes result[:stdout], "notify"
     assert_includes result[:stdout], "remember"
     assert_empty result[:stderr]
   end
@@ -45,6 +46,22 @@ class KitCLITest < Minitest::Test
     assert_includes result[:stderr], "Extract commitments, decisions, risks, and open loops"
   end
 
+  def test_notify_requires_message
+    result = run_kit("notify")
+
+    assert_equal 1, result[:status]
+    assert_empty result[:stdout]
+    assert_includes result[:stderr], "Error: missing MESSAGE"
+  end
+
+  def test_notify_can_dry_run_without_sending_notification
+    result = run_kit("notify", "Review", "open", "commitments", env: { "KIT_NOTIFY_DRY_RUN" => "1" })
+
+    assert_equal 0, result[:status]
+    assert_includes result[:stdout], "terminal-notifier -title Kit -message Review open commitments"
+    assert_empty result[:stderr]
+  end
+
   def test_listen_is_not_passthrough_yet
     result = run_kit("listen")
 
@@ -63,8 +80,8 @@ class KitCLITest < Minitest::Test
 
   private
 
-  def run_kit(*args)
-    stdout, stderr, status = Open3.capture3(RUBY, File.join(ROOT, "bin/kit"), *args, chdir: ROOT)
+  def run_kit(*args, env: {})
+    stdout, stderr, status = Open3.capture3(env, RUBY, File.join(ROOT, "bin/kit"), *args, chdir: ROOT)
     { stdout: stdout, stderr: stderr, status: status.exitstatus }
   end
 end

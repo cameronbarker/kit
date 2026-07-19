@@ -9,6 +9,7 @@ module Kit::Listen
   class RecordingState
     STATE_FILENAME = ".recording-state.json"
     STATUS_KEYS = %w[
+      mode
       phase
       recorder_pid
       title
@@ -18,6 +19,11 @@ module Kit::Listen
       started_at
       ended_at
       latest_error
+      session_id
+      chunks_dir
+      chunk_count
+      transcript_json
+      transcript_md
     ].freeze
 
     attr_reader :recordings_dir
@@ -34,7 +40,7 @@ module Kit::Listen
 
     def self.latest_metadata(recordings_dir)
       dir = File.expand_path(recordings_dir)
-      paths = Dir.glob(File.join(dir, "*.yml")).sort
+      paths = (Dir.glob(File.join(dir, "*.yml")) + Dir.glob(File.join(dir, "*", "session.yml"))).sort
       return nil if paths.empty?
 
       path = paths.last
@@ -81,6 +87,7 @@ module Kit::Listen
     def begin_recording!(title:, source_device:, recording_path:, metadata_path:, started_at:, recorder_pid: Process.pid)
       write!(
         "phase" => "recording",
+        "mode" => "single_file",
         "recorder_pid" => Integer(recorder_pid),
         "title" => title,
         "source_device" => source_device,
@@ -213,6 +220,7 @@ module Kit::Listen
     def idle_defaults
       {
         "phase" => "idle",
+        "mode" => "single_file",
         "recorder_pid" => nil,
         "title" => nil,
         "source_device" => nil,
@@ -220,7 +228,12 @@ module Kit::Listen
         "metadata_path" => nil,
         "started_at" => nil,
         "ended_at" => nil,
-        "latest_error" => nil
+        "latest_error" => nil,
+        "session_id" => nil,
+        "chunks_dir" => nil,
+        "chunk_count" => 0,
+        "transcript_json" => nil,
+        "transcript_md" => nil
       }
     end
 

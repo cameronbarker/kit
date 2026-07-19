@@ -1,15 +1,20 @@
-# Kit Menu Bar Scaffold
+# Kit Menu Bar
 
-This directory is a foundation for a future native macOS menu bar helper. It is intentionally thin: the menu bar process should present Kit state and trigger Kit actions, while core behavior stays in reusable Ruby commands and services.
+This directory contains a thin native macOS menu bar helper. The menu bar process presents Kit state and triggers Kit actions, while core behavior stays in reusable Ruby commands and services.
 
 ## Boundary
 
 The menu bar helper must call stable Kit commands and consume JSON. It should not scrape human-readable CLI output.
 
-Current bridge entry point:
+Current bridge entry points:
 
 ```bash
 kit status --json
+kit listen status --json
+kit listen start --json "Menubar Listen"
+kit listen pause --json
+kit listen resume --json
+kit listen stop --json
 ```
 
 Planned JSON entry points for future work:
@@ -19,7 +24,6 @@ kit surface --json
 kit followup --overdue --json
 kit prepare --next --json
 kit brief --json
-kit listen status --json
 ```
 
 The Ruby bridge lives under `lib/kit/app_bridge/`. It exposes machine-readable status for app surfaces without depending on AppKit, notifications, or any future GUI process.
@@ -46,7 +50,7 @@ Run against this checkout:
 KIT_CLI="$PWD/../../bin/kit" swift run KitMenuBar
 ```
 
-The scaffold currently reads `kit status --json`, shows a small health indicator, and renders planned menu actions as disabled items. It does not implement production packaging, login items, app signing, global shortcuts, quick capture UI, or real action execution yet.
+The helper reads `kit status --json` and `kit listen status --json`, shows a small health indicator, and exposes listen start/pause/resume/stop actions. It does not implement production packaging, login items, app signing, global shortcuts, or quick capture UI yet.
 
 ## Future Direction
 

@@ -138,8 +138,10 @@ class Kit::ListenCLITest < Minitest::Test
   def test_json_contracts_for_status_latest_stop
     recordings_dir = File.join(@tmpdir, "recordings")
     status_keys = %w[
+      mode
       phase recorder_pid title source_device recording_path
       metadata_path started_at ended_at latest_error
+      session_id chunks_dir chunk_count transcript_json transcript_md
     ]
     latest_keys = %w[found metadata_path recording]
     stop_keys = %w[ok action message phase recorder_pid]
@@ -155,5 +157,77 @@ class Kit::ListenCLITest < Minitest::Test
     status, stdout, = capture_json_cli("stop", "--json", "--recordings-dir", recordings_dir)
     assert_equal 0, status
     assert_equal stop_keys.sort, parse_json_stdout(stdout).keys.sort
+  end
+
+  def test_chunked_start_pause_resume_stop_dry_run_merges_transcript
+    recordings_dir = File.join(@tmpdir, "recordings")
+    transcripts_dir = File.join(@tmpdir, "transcripts")
+
+    status, stdout, = capture_json_cli(
+      "start",
+      "--json",
+      "--dry-run",
+      "--mock",
+      "--device", "Loopback Audio",
+      "--chunk-seconds", "30",
+      "--recordings-dir", recordings_dir,
+      "--transcripts-dir", transcripts_dir,
+      "Platform Sync"
+    )
+    assert_equal 0, status
+    started = parse_json_stdout(stdout)
+    assert_equal "started", started["action"]
+    assert_equal "recording", started["phase"]
+    assert_equal 1, started["chunk_count"]
+    session_id = started["session_id"]
+
+    status, stdout, = capture_json_cli("pause", "--json", "--recordings-dir", recordings_dir)
+    assert_equal 0, status
+    paused = parse_json_stdout(stdout)
+    assert_equal "paused", paused["action"]
+    assert_equal "paused", paused["phase"]
+    assert_equal session_id, paused["session_id"]
+
+    status, stdout, = capture_json_cli(
+      "resume",
+      "--json",
+      "--dry-run",
+      "--recordings-dir", recordings_dir
+    )
+    assert_equal 0, status
+    resumed = parse_json_stdout(stdout)
+    assert_equal "resumed", resumed["action"]
+    assert_equal "recording", resumed["phase"]
+    assert_equal 2, resumed["chunk_count"]
+
+    status, stdout, = capture_json_cli(
+      "stop",
+      "--json",
+      "--mock",
+      "--recordings-dir", recordings_dir,
+      "--transcripts-dir", transcripts_dir
+    )
+    assert_equal 0, status
+    stopped = parse_json_stdout(stdout)
+    assert_equal "completed", stopped["action"]
+    assert_equal "completed", stopped["phase"]
+    assert_equal 2, stopped["chunk_count"]
+    assert File.file?(stopped["transcript_json"])
+    assert File.file?(stopped["transcript_md"])
+
+    final = JSON.parse(File.read(stopped["transcript_json"]))
+    assert_equal "Platform Sync", final["title"]
+    assert_equal 4, final["segments"].length
+    assert_equal [1, 1, 2, 2], final["segments"].map { |segment| segment["chunk_index"] }
+    assert_operator final["segments"][2]["start"], :>, final["segments"][1]["start"]
+
+    latest_status, latest_stdout, = capture_json_cli(
+      "latest", "--json", "--recordings-dir", recordings_dir
+    )
+    assert_equal 0, latest_status
+    latest = parse_json_stdout(latest_stdout)
+    assert_equal true, latest["found"]
+    assert_equal stopped["metadata_path"], latest["metadata_path"]
+    assert_equal true, latest["recording"]["transcribed"]
   end
 end

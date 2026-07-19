@@ -38,6 +38,22 @@ struct KitStatus: Decodable {
     }
 }
 
+struct ListenStatus: Decodable {
+    let phase: String
+    let recorderPid: Int?
+    let title: String?
+    let sessionId: String?
+    let chunkCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case phase
+        case recorderPid = "recorder_pid"
+        case title
+        case sessionId = "session_id"
+        case chunkCount = "chunk_count"
+    }
+}
+
 final class KitCLI {
     let executableURL: URL
 
@@ -48,6 +64,11 @@ final class KitCLI {
     func status() throws -> KitStatus {
         let data = try run(arguments: ["status", "--json"])
         return try JSONDecoder().decode(KitStatus.self, from: data)
+    }
+
+    func listenStatus() throws -> ListenStatus {
+        let data = try run(arguments: ["listen", "status", "--json"])
+        return try JSONDecoder().decode(ListenStatus.self, from: data)
     }
 
     func run(arguments: [String]) throws -> Data {
@@ -72,11 +93,23 @@ final class KitCLI {
         }
         return data
     }
+
+    func runAsync(arguments: [String], completion: @escaping (Result<Data, Error>) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let data = try self.run(arguments: arguments)
+                DispatchQueue.main.async { completion(.success(data)) }
+            } catch {
+                DispatchQueue.main.async { completion(.failure(error)) }
+            }
+        }
+    }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let kit = KitCLI(executableURL: URL(fileURLWithPath: ProcessInfo.processInfo.environment["KIT_CLI"] ?? "/usr/local/bin/kit"))
+    private var lastError: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -96,12 +129,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             addCommand("Open Loops", id: "open_loops", status: status, to: menu)
             addCommand("Overdue Commitments", id: "overdue_commitments", status: status, to: menu)
             addCommand("Today's Surface", id: "today_surface", status: status, to: menu)
-            addCommand("Listen", id: "listen", status: status, to: menu)
+            addListenControls(to: menu)
             addCommand("Next Meeting Prep", id: "next_meeting_prep", status: status, to: menu)
             addCommand("Brief", id: "brief", status: status, to: menu)
 
             menu.addItem(.separator())
             menu.addItem(NSMenuItem(title: "Notifications: \(status.notifications.available ? "available" : "not configured")", action: nil, keyEquivalent: ""))
+            if let lastError {
+                menu.addItem(NSMenuItem(title: "Last error: \(lastError)", action: nil, keyEquivalent: ""))
+            }
         } catch {
             statusItem.button?.title = "Kit!"
             menu.addItem(NSMenuItem(title: error.localizedDescription, action: nil, keyEquivalent: ""))
@@ -120,6 +156,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSMenuItem(title: "\(command.label.isEmpty ? fallbackTitle : command.label)\(suffix)", action: nil, keyEquivalent: "")
         item.isEnabled = command.implemented
         menu.addItem(item)
+    }
+
+    private func addListenControls(to menu: NSMenu) {
+        do {
+            let listen = try kit.listenStatus()
+            let title = listen.title ?? "No active session"
+            menu.addItem(NSMenuItem(title: "Listen: \(listen.phase) · \(title) · chunks \(listen.chunkCount)", action: nil, keyEquivalent: ""))
+
+            switch listen.phase {
+            case "recording", "transcribing":
+                addListenAction("Pause", action: #selector(pauseListen), enabled: listen.phase == "recording", to: menu)
+                addListenAction("Stop", action: #selector(stopListen), enabled: true, to: menu)
+            case "paused":
+                addListenAction("Resume", action: #selector(resumeListen), enabled: true, to: menu)
+                addListenAction("Stop", action: #selector(stopListen), enabled: true, to: menu)
+            default:
+                addListenAction("Start Listening", action: #selector(startListen), enabled: true, to: menu)
+            }
+        } catch {
+            menu.addItem(NSMenuItem(title: "Listen status unavailable", action: nil, keyEquivalent: ""))
+            addListenAction("Start Listening", action: #selector(startListen), enabled: true, to: menu)
+        }
+    }
+
+    private func addListenAction(_ title: String, action: Selector, enabled: Bool, to menu: NSMenu) {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.isEnabled = enabled
+        menu.addItem(item)
+    }
+
+    @objc private func startListen() {
+        runListenCommand(["listen", "start", "--json", "Menubar Listen"])
+    }
+
+    @objc private func pauseListen() {
+        runListenCommand(["listen", "pause", "--json"])
+    }
+
+    @objc private func resumeListen() {
+        runListenCommand(["listen", "resume", "--json"])
+    }
+
+    @objc private func stopListen() {
+        runListenCommand(["listen", "stop", "--json"])
+    }
+
+    private func runListenCommand(_ arguments: [String]) {
+        kit.runAsync(arguments: arguments) { result in
+            switch result {
+            case .success:
+                self.lastError = nil
+            case .failure(let error):
+                self.lastError = error.localizedDescription
+            }
+            self.refreshMenu()
+        }
     }
 }
 

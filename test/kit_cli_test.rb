@@ -77,7 +77,8 @@ class KitCLITest < Minitest::Test
     assert_equal "0.1.0", payload["kit_version"]
     assert_equal "cli_json", payload.dig("integration", "mode")
     assert_includes payload.dig("integration", "stable_entrypoints"), ["kit", "status", "--json"]
-    assert_equal ["kit", "listen", "record"], payload.dig("commands", "listen", "command")
+    assert_equal ["kit", "listen", "start"], payload.dig("commands", "listen", "command")
+    assert_equal ["kit", "listen", "pause", "--json"], payload.dig("commands", "listen_pause", "command")
   end
 
   def test_status_rejects_unexpected_arguments

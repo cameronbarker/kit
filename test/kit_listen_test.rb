@@ -27,6 +27,7 @@ class KitListenTest < Minitest::Test
     assert_kind_of Class, Kit::Listen::CLI
     assert_kind_of Class, Kit::Listen::Recorder
     assert_kind_of Class, Kit::Listen::RecordingState
+    assert_kind_of Class, Kit::Listen::ChunkedSession
     assert_kind_of Class, Kit::Listen::Pipeline
     assert_equal ROOT, Kit::Listen::ROOT
     assert_equal File.join(ROOT, "lib", "kit", "listen", "python", "transcribe.py"), Kit::Listen::PYTHON_WORKER
@@ -44,22 +45,21 @@ class KitListenTest < Minitest::Test
 
     assert status.success?, stderr
     assert_includes stdout, "Implemented commands:"
-    assert_includes stdout, "Planned lifecycle commands:"
+    assert_includes stdout, "Planned transcript commands:"
     assert_includes stdout, "start [options] TITLE"
     assert_includes stdout, "pause [options]"
     assert_includes stdout, "resume [options]"
     assert_includes stdout, "rename-speaker"
     assert_includes stdout, "Target workflow:"
-    assert_includes stdout, 'kit listen start "Platform Sync" --transcribe-on-stop'
+    assert_includes stdout, 'kit listen start "Platform Sync"'
   end
 
-  def test_planned_lifecycle_command_is_intentional_stub
+  def test_pause_without_active_session_reports_error
     stdout, stderr, status = Open3.capture3(File.join(ROOT, "bin/kit"), "listen", "pause")
 
-    assert_equal 2, status.exitstatus
+    assert_equal 1, status.exitstatus
     assert_empty stdout
-    assert_includes stderr, "kit listen pause is planned but not implemented yet."
-    assert_includes stderr, "Pause the active recording"
+    assert_includes stderr, "no active chunked listen session"
   end
 
   def test_kit_listen_status_uses_migrated_cli

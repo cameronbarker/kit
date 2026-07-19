@@ -24,7 +24,22 @@ module Kit
         },
         "listen" => {
           "label" => "Start listening",
-          "command" => ["kit", "listen", "record"],
+          "command" => ["kit", "listen", "start"],
+          "implemented" => true
+        },
+        "listen_pause" => {
+          "label" => "Pause listening",
+          "command" => ["kit", "listen", "pause", "--json"],
+          "implemented" => true
+        },
+        "listen_resume" => {
+          "label" => "Resume listening",
+          "command" => ["kit", "listen", "resume", "--json"],
+          "implemented" => true
+        },
+        "listen_stop" => {
+          "label" => "Stop listening",
+          "command" => ["kit", "listen", "stop", "--json"],
           "implemented" => true
         },
         "next_meeting_prep" => {

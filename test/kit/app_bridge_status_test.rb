@@ -25,6 +25,8 @@ class KitAppBridgeStatusTest < Minitest::Test
     assert_equal ["kit", "surface", "--json"], status.dig("commands", "open_loops", "command")
     assert_equal false, status.dig("commands", "open_loops", "implemented")
     assert_equal true, status.dig("commands", "listen", "implemented")
+    assert_equal true, status.dig("commands", "listen_pause", "implemented")
+    assert_equal ["kit", "listen", "stop", "--json"], status.dig("commands", "listen_stop", "command")
     assert_equal Kit::Notifications::DEFAULT_APP_ICON, status.dig("notifications", "app_icon")
     assert_equal false, status.dig("notifications", "available")
   end

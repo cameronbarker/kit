@@ -6,9 +6,6 @@ require "optparse"
 module Kit::Listen
   class CLI
     PLANNED_COMMANDS = {
-      "start" => "Start a background recording session",
-      "pause" => "Pause the active recording",
-      "resume" => "Resume a paused recording",
       "speakers" => "Show transcript speaker labels",
       "rename-speaker" => "Rename a speaker and re-render"
     }.freeze
@@ -27,7 +24,8 @@ module Kit::Listen
         transcripts_dir: DEFAULT_TRANSCRIPTS_DIR,
         recordings_dir: DEFAULT_RECORDINGS_DIR,
         device: nil,
-        json: false
+        json: false,
+        chunk_seconds: DEFAULT_CHUNK_SECONDS
       }
     end
 
@@ -58,6 +56,31 @@ module Kit::Listen
           mock: @options[:mock],
           dry_run: @options[:dry_run]
         ).record
+      when "start"
+        parse_start_options!
+        title = required_title!
+        payload = ChunkedSession.new(
+          title: title,
+          device: @options[:device],
+          recordings_dir: @options[:recordings_dir],
+          transcripts_dir: @options[:transcripts_dir],
+          chunk_seconds: @options[:chunk_seconds],
+          mock: @options[:mock],
+          dry_run: @options[:dry_run]
+        ).start
+        print_control_payload(payload)
+      when "pause"
+        parse_control_options!("Usage: listen pause [options]")
+        payload = ChunkedSession.pause(@options[:recordings_dir])
+        print_control_payload(payload)
+      when "resume"
+        parse_control_options!("Usage: listen resume [options]")
+        payload = ChunkedSession.resume(
+          @options[:recordings_dir],
+          mock: @options[:mock],
+          dry_run: @options[:dry_run]
+        )
+        print_control_payload(payload)
       when "status"
         parse_control_options!("Usage: listen status [options]")
         run_status
@@ -120,10 +143,27 @@ module Kit::Listen
       end
     end
 
+    def parse_start_options!
+      parse_options!("Usage: kit listen start [options] TITLE") do |opts|
+        opts.on("--device NAME", "avfoundation audio device name") { |name| @options[:device] = name }
+        opts.on("--chunk-seconds SECONDS", Integer, "Chunk duration in seconds (default: #{DEFAULT_CHUNK_SECONDS})") do |seconds|
+          @options[:chunk_seconds] = seconds
+        end
+        opts.on("--mock", "With stop transcription, use mock Python worker") { @options[:mock] = true }
+        opts.on("--dry-run", "Write placeholder chunks without ffmpeg capture") { @options[:dry_run] = true }
+        opts.on("--json", "Emit machine-readable JSON") { @options[:json] = true }
+        add_recordings_dir_option!(opts)
+        add_transcripts_dir_option!(opts, "Transcripts root used on stop")
+      end
+    end
+
     def parse_control_options!(banner)
       parse_options!(banner) do |opts|
         opts.on("--json", "Emit machine-readable JSON") { @options[:json] = true }
+        opts.on("--mock", "Use mock Python worker when command transcribes") { @options[:mock] = true }
+        opts.on("--dry-run", "Use placeholder chunk behavior when supported") { @options[:dry_run] = true }
         add_recordings_dir_option!(opts)
+        add_transcripts_dir_option!(opts, "Transcripts root when command transcribes")
       end
       raise Error, "unexpected arguments: #{@argv.join(' ')}" unless @argv.empty?
     end
@@ -138,13 +178,11 @@ module Kit::Listen
     end
 
     def run_status
-      state = RecordingState.new(@options[:recordings_dir])
-      state.recover_if_stale!
-      payload = state.to_status_hash
+      payload = ChunkedSession.status(@options[:recordings_dir])
       if @options[:json]
         puts JSON.pretty_generate(payload)
       else
-        puts "phase=#{payload['phase']} pid=#{payload['recorder_pid'].inspect} title=#{payload['title'].inspect}"
+        puts "phase=#{payload['phase']} pid=#{payload['recorder_pid'].inspect} title=#{payload['title'].inspect} chunks=#{payload['chunk_count']}"
       end
       0
     end
@@ -162,12 +200,19 @@ module Kit::Listen
     end
 
     def run_stop
-      state = RecordingState.new(@options[:recordings_dir])
-      payload = state.stop!
+      payload = ChunkedSession.stop(
+        @options[:recordings_dir],
+        transcripts_dir: @options[:transcripts_dir],
+        mock: @options[:mock]
+      )
+      print_control_payload(payload)
+    end
+
+    def print_control_payload(payload)
       if @options[:json]
         puts JSON.pretty_generate(payload)
       else
-        puts "stop=#{payload['action']} phase=#{payload['phase']} #{payload['message']}"
+        puts "#{payload['action']} phase=#{payload['phase']} #{payload['message']}"
       end
       0
     end
@@ -219,6 +264,9 @@ module Kit::Listen
 
         Implemented commands:
           devices                     List macOS avfoundation audio input devices
+          start [options] TITLE       Start a background chunked recording session
+          pause [options]             Pause the active chunked recording
+          resume [options]            Resume a paused chunked recording
           record [options] TITLE      Record in the foreground from an audio device
           status [--json]             Show recording lifecycle state
           latest [--json]             Show newest recording metadata
@@ -228,10 +276,7 @@ module Kit::Listen
           help                        Show this help
           version                     Show version
 
-        Planned lifecycle commands:
-          start [options] TITLE        Start a background recording session
-          pause [options]              Pause the active recording
-          resume [options]             Resume a paused recording
+        Planned transcript commands:
           speakers [options] INPUT     Show transcript speaker labels
           rename-speaker INPUT RAW NAME
                                       Rename a speaker and re-render
@@ -250,13 +295,16 @@ module Kit::Listen
 
         Control options:
           --json                      Machine-readable JSON for status/latest/stop
+          --mock                      Use mock Python worker when command transcribes
+          --dry-run                   Placeholder chunk behavior where supported
           --recordings-dir DIR        Default: recordings/
+          --transcripts-dir DIR       Used when command transcribes
 
         Target workflow:
-          kit listen start "Platform Sync" --transcribe-on-stop
+          kit listen start "Platform Sync"
           kit listen pause
           kit listen resume
-          kit listen stop --transcribe
+          kit listen stop
           kit listen transcribe latest
           kit listen render latest
 

@@ -53,7 +53,7 @@ reflect     Review patterns over time
 qmd         Manage/search the local qmd index
 ```
 
-The `listen` command is implemented as a local recording and transcription pipeline. It can list ffmpeg audio devices, record audio from a macOS AVFoundation input, track recording state, show the latest recording metadata, stop an active recording, transcribe an existing audio/video file, and re-render transcript artifacts from raw JSON.
+The `listen` command is implemented as a local recording and transcription pipeline. It can list ffmpeg audio devices, run chunked background recording sessions, pause/resume/stop an active session, track recording state, show the latest recording metadata, transcribe an existing audio/video file, and re-render transcript artifacts from raw JSON. The older foreground `record` command remains available.
 
 The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier` and uses `assets/kit-icon.png` as its notification app icon. The `status --json` command exposes a stable app bridge contract for future non-CLI surfaces. Other planned commands currently return an intentional "not implemented yet" message.
 
@@ -77,6 +77,9 @@ Default local output is ignored by git:
 
 ```text
 recordings/
+  <timestamp>-<slug>/
+    session.yml
+    chunks/chunk-000001.wav
   <timestamp>-<slug>.m4a
   <timestamp>-<slug>.yml
 
@@ -91,11 +94,14 @@ Common commands:
 
 ```bash
 bin/kit listen devices
+bin/kit listen start "Platform Sync" --device "Loopback Audio"
+bin/kit listen pause
+bin/kit listen resume
+bin/kit listen stop --json
 bin/kit listen record "Platform Sync" --device "Loopback Audio"
 bin/kit listen record "Platform Sync" --format m4a --transcribe
 bin/kit listen status --json
 bin/kit listen latest --json
-bin/kit listen stop --json
 bin/kit listen transcribe --mock path/to/meeting.m4a
 bin/kit listen render path/to/meeting.m4a
 ```
@@ -109,7 +115,7 @@ Mock transcription requires no Python ML install. Real local transcription requi
 Run the CLI test suite with:
 
 ```bash
-ruby -Itest -e 'Dir["test/*_test.rb"].sort.each { |path| require_relative path }'
+ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |path| require File.expand_path(path) }'
 ```
 
 No external Ruby gems are required. Automated tests do not send real notifications and use mock transcription rather than real ML.

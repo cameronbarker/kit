@@ -10,6 +10,7 @@ module Kit
     AUDIO_DEVICE_ENV = "KIT_LISTEN_AUDIO_DEVICE"
     LEGACY_AUDIO_DEVICE_ENV = "LEADERSHIP_TRANSCRIPTS_AUDIO_DEVICE"
     SUPPORTED_FORMATS = %w[m4a wav].freeze
+    DEFAULT_CHUNK_SECONDS = 60
 
     class Error < Kit::Error; end
   end
@@ -19,5 +20,6 @@ require_relative "listen/util"
 require_relative "listen/ffmpeg"
 require_relative "listen/pipeline"
 require_relative "listen/recording_state"
+require_relative "listen/chunked_session"
 require_relative "listen/recorder"
 require_relative "listen/cli"

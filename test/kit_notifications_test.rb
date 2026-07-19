@@ -36,6 +36,22 @@ class KitNotificationsTest < Minitest::Test
     assert_equal ["terminal-notifier", "-title", "Kit", "-message", "Review open commitments"], command
   end
 
+  def test_terminal_notifier_command_for_app_icon
+    notification = Kit::Notifications::Notification.new(
+      title: "Kit",
+      message: "Review open commitments",
+      app_icon: "/tmp/kit-icon.png"
+    )
+    command = Kit::Notifications::TerminalNotifierBackend.new.command_for(notification)
+
+    assert_equal [
+      "terminal-notifier",
+      "-title", "Kit",
+      "-message", "Review open commitments",
+      "-appIcon", "/tmp/kit-icon.png"
+    ], command
+  end
+
   def test_terminal_notifier_command_for_optional_fields
     notification = Kit::Notifications::Notification.new(
       title: "Kit",
@@ -43,7 +59,8 @@ class KitNotificationsTest < Minitest::Test
       subtitle: "Meeting Prep",
       sound: "Glass",
       group: "kit-prepare",
-      open: "obsidian://open?vault=Leadership"
+      open: "obsidian://open?vault=Leadership",
+      app_icon: "/tmp/kit-icon.png"
     )
     command = Kit::Notifications::TerminalNotifierBackend.new.command_for(notification)
 
@@ -54,7 +71,8 @@ class KitNotificationsTest < Minitest::Test
       "-subtitle", "Meeting Prep",
       "-sound", "Glass",
       "-group", "kit-prepare",
-      "-open", "obsidian://open?vault=Leadership"
+      "-open", "obsidian://open?vault=Leadership",
+      "-appIcon", "/tmp/kit-icon.png"
     ], command
   end
 
@@ -114,5 +132,29 @@ class KitNotificationsTest < Minitest::Test
 
     assert result.success?
     assert_equal backend, result.backend
+  end
+
+  def test_module_deliver_uses_default_app_icon
+    result = Kit::Notifications.deliver(
+      title: "Kit",
+      message: "Review",
+      backend: Kit::Notifications::NullBackend.new
+    )
+
+    assert_equal Kit::Notifications::DEFAULT_APP_ICON, result.notification.app_icon
+    assert_includes result.command, "-appIcon"
+    assert_includes result.command, Kit::Notifications::DEFAULT_APP_ICON
+  end
+
+  def test_module_deliver_can_omit_app_icon
+    result = Kit::Notifications.deliver(
+      title: "Kit",
+      message: "Review",
+      app_icon: nil,
+      backend: Kit::Notifications::NullBackend.new
+    )
+
+    assert_nil result.notification.app_icon
+    refute_includes result.command, "-appIcon"
   end
 end

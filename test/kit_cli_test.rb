@@ -2,6 +2,7 @@
 
 require "open3"
 require "rbconfig"
+require "json"
 require "minitest/autorun"
 
 class KitCLITest < Minitest::Test
@@ -60,7 +61,31 @@ class KitCLITest < Minitest::Test
 
     assert_equal 0, result[:status]
     assert_includes result[:stdout], "terminal-notifier -title Kit -message Review open commitments"
+    assert_includes result[:stdout], "-appIcon"
+    assert_includes result[:stdout], "assets/kit-icon.png"
     assert_empty result[:stderr]
+  end
+
+  def test_status_json_exposes_app_bridge_contract
+    result = run_kit("status", "--json")
+
+    assert_equal 0, result[:status]
+    assert_empty result[:stderr]
+
+    payload = JSON.parse(result[:stdout])
+    assert_equal 1, payload["schema_version"]
+    assert_equal "0.1.0", payload["kit_version"]
+    assert_equal "cli_json", payload.dig("integration", "mode")
+    assert_includes payload.dig("integration", "stable_entrypoints"), ["kit", "status", "--json"]
+    assert_equal ["kit", "listen", "record"], payload.dig("commands", "listen", "command")
+  end
+
+  def test_status_rejects_unexpected_arguments
+    result = run_kit("status", "--plain")
+
+    assert_equal 1, result[:status]
+    assert_empty result[:stdout]
+    assert_includes result[:stderr], "Error: usage: kit status [--json]"
   end
 
   def test_listen_is_implemented_subcommand

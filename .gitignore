@@ -3,3 +3,5 @@ recordings/
 transcripts/
 .cache/
 .venv/
+.DS_Store
+mac/menubar/.build/

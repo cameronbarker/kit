@@ -4,6 +4,9 @@ require "open3"
 
 module Kit
   module Notifications
+    ROOT = File.expand_path("../..", __dir__)
+    DEFAULT_APP_ICON = File.join(ROOT, "assets", "kit-icon.png")
+
     class ValidationError < Error; end
 
     DeliveryResult = Struct.new(
@@ -20,15 +23,16 @@ module Kit
     )
 
     class Notification
-      attr_reader :title, :message, :subtitle, :sound, :group, :open
+      attr_reader :title, :message, :subtitle, :sound, :group, :open, :app_icon
 
-      def initialize(title:, message: nil, body: nil, subtitle: nil, sound: nil, group: nil, open: nil)
+      def initialize(title:, message: nil, body: nil, subtitle: nil, sound: nil, group: nil, open: nil, app_icon: nil)
         @title = required_string(title, "title")
         @message = required_string(message || body, "message")
         @subtitle = optional_string(subtitle)
         @sound = optional_string(sound)
         @group = optional_string(group)
         @open = optional_string(open)
+        @app_icon = optional_string(app_icon)
       end
 
       private
@@ -90,6 +94,7 @@ module Kit
         command.push("-sound", notification.sound) if notification.sound
         command.push("-group", notification.group) if notification.group
         command.push("-open", notification.open) if notification.open
+        command.push("-appIcon", notification.app_icon) if notification.app_icon
         command
       end
     end
@@ -111,7 +116,17 @@ module Kit
       end
     end
 
-    def self.deliver(title:, message: nil, body: nil, subtitle: nil, sound: nil, group: nil, open: nil, backend: TerminalNotifierBackend.new)
+    def self.deliver(
+      title:,
+      message: nil,
+      body: nil,
+      subtitle: nil,
+      sound: nil,
+      group: nil,
+      open: nil,
+      app_icon: DEFAULT_APP_ICON,
+      backend: TerminalNotifierBackend.new
+    )
       notification = Notification.new(
         title: title,
         message: message,
@@ -119,7 +134,8 @@ module Kit
         subtitle: subtitle,
         sound: sound,
         group: group,
-        open: open
+        open: open,
+        app_icon: app_icon
       )
       backend.deliver(notification)
     end

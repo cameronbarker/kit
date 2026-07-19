@@ -21,6 +21,7 @@ bin/kit help
 bin/kit version
 bin/kit listen help
 bin/kit listen status --json
+bin/kit status --json
 bin/kit notify "Review open commitments"
 ```
 
@@ -41,6 +42,7 @@ listen -> notice -> remember -> surface -> prepare/brief/followup -> reflect
 ```text
 listen      Record and transcribe conversations
 notify      Send a simple local Kit notification
+status      Show machine-readable Kit app bridge status
 notice      Extract commitments, decisions, risks, and open loops
 remember    Write reviewed items into Obsidian/PARA
 surface     Show what needs attention now
@@ -53,7 +55,19 @@ qmd         Manage/search the local qmd index
 
 The `listen` command is implemented as a local recording and transcription pipeline. It can list ffmpeg audio devices, record audio from a macOS AVFoundation input, track recording state, show the latest recording metadata, stop an active recording, transcribe an existing audio/video file, and re-render transcript artifacts from raw JSON.
 
-The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier`. Other planned commands currently return an intentional "not implemented yet" message.
+The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier` and uses `assets/kit-icon.png` as its notification app icon. The `status --json` command exposes a stable app bridge contract for future non-CLI surfaces. Other planned commands currently return an intentional "not implemented yet" message.
+
+## App Bridge
+
+Kit keeps Mac-facing UI thin. Future app surfaces should call stable Kit commands and consume JSON rather than scrape human-readable CLI output.
+
+Current bridge:
+
+```bash
+bin/kit status --json
+```
+
+The Ruby bridge lives in `lib/kit/app_bridge/`. A native macOS menu bar scaffold lives in `mac/menubar/` and documents how a future helper should integrate with Kit core commands.
 
 ## Listen
 

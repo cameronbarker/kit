@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "json"
+
 module Kit
   class CLI
     PLANNED_COMMANDS = {
@@ -15,7 +17,8 @@ module Kit
 
     IMPLEMENTED_COMMANDS = {
       "listen" => "Record and transcribe conversations",
-      "notify" => "Send a simple local Kit notification"
+      "notify" => "Send a simple local Kit notification",
+      "status" => "Show machine-readable Kit app bridge status"
     }.freeze
 
     def self.run(argv)
@@ -40,6 +43,8 @@ module Kit
         0
       when "notify"
         run_notify
+      when "status"
+        run_status
       when "listen"
         Listen::CLI.run(@argv)
       when *PLANNED_COMMANDS.keys
@@ -104,6 +109,29 @@ module Kit
 
       @err.puts "Error: #{result.error}"
       1
+    rescue Error => e
+      @err.puts "Error: #{e.message}"
+      1
+    end
+
+    def run_status
+      json = false
+      case @argv
+      when []
+        json = false
+      when ["--json"]
+        json = true
+      else
+        raise Error, "usage: kit status [--json]"
+      end
+
+      payload = AppBridge::Status.new.to_h
+      if json
+        @out.puts JSON.pretty_generate(payload)
+      else
+        @out.puts "kit=#{payload['kit_version']} health=#{payload.dig('health', 'indicator')}"
+      end
+      0
     rescue Error => e
       @err.puts "Error: #{e.message}"
       1

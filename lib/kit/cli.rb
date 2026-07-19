@@ -18,7 +18,8 @@ module Kit
     IMPLEMENTED_COMMANDS = {
       "listen" => "Record and transcribe conversations",
       "notify" => "Send a simple local Kit notification",
-      "status" => "Show machine-readable Kit app bridge status"
+      "status" => "Show machine-readable Kit app bridge status",
+      "menubar" => "Start the macOS Kit menu bar helper"
     }.freeze
 
     def self.run(argv)
@@ -45,6 +46,8 @@ module Kit
         run_notify
       when "status"
         run_status
+      when "menubar"
+        run_menubar
       when "listen"
         Listen::CLI.run(@argv)
       when *PLANNED_COMMANDS.keys
@@ -135,6 +138,57 @@ module Kit
     rescue Error => e
       @err.puts "Error: #{e.message}"
       1
+    end
+
+    def run_menubar
+      foreground = false
+      @argv.each do |arg|
+        case arg
+        when "start", "help", "-h", "--help"
+          next if arg == "start"
+
+          print_menubar_help
+          return 0
+        when "--foreground"
+          foreground = true
+        else
+          raise Error, "usage: kit menubar [start] [--foreground]"
+        end
+      end
+
+      result = MenuBar.start(foreground: foreground)
+      unless result.success?
+        @err.puts "Error: #{result.error}"
+        return 1
+      end
+
+      if result.dry_run
+        @out.puts result.command.join(" ")
+        return 0
+      end
+
+      if foreground
+        @out.puts "Starting Kit menu bar in the foreground (pid #{result.pid})..."
+        _pid, status = Process.wait2(result.pid)
+        return status.exitstatus
+      end
+
+      @out.puts "Started Kit menu bar (pid #{result.pid})"
+      0
+    rescue Error => e
+      @err.puts "Error: #{e.message}"
+      1
+    end
+
+    def print_menubar_help
+      @out.puts <<~HELP
+        Usage: kit menubar [start] [--foreground]
+
+        Start the thin macOS Kit menu bar helper from mac/menubar.
+
+        Options:
+          --foreground    Keep the CLI attached to the menu bar process
+      HELP
     end
 
     def notify_dry_run?

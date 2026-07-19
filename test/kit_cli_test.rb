@@ -17,6 +17,7 @@ class KitCLITest < Minitest::Test
     assert_includes result[:stdout], "listen -> notice -> remember -> surface"
     assert_includes result[:stdout], "notify"
     assert_includes result[:stdout], "listen"
+    assert_includes result[:stdout], "menubar"
     assert_includes result[:stdout], "remember"
     assert_empty result[:stderr]
   end
@@ -87,6 +88,30 @@ class KitCLITest < Minitest::Test
     assert_equal 1, result[:status]
     assert_empty result[:stdout]
     assert_includes result[:stderr], "Error: usage: kit status [--json]"
+  end
+
+  def test_menubar_help_prints_usage
+    result = run_kit("menubar", "help")
+
+    assert_equal 0, result[:status]
+    assert_includes result[:stdout], "Usage: kit menubar [start] [--foreground]"
+    assert_empty result[:stderr]
+  end
+
+  def test_menubar_can_dry_run_without_starting_process
+    result = run_kit("menubar", env: { "KIT_MENUBAR_DRY_RUN" => "1" })
+
+    assert_equal 0, result[:status]
+    assert_equal "swift run KitMenuBar\n", result[:stdout]
+    assert_empty result[:stderr]
+  end
+
+  def test_menubar_rejects_unexpected_arguments
+    result = run_kit("menubar", "--daemon")
+
+    assert_equal 1, result[:status]
+    assert_empty result[:stdout]
+    assert_includes result[:stderr], "Error: usage: kit menubar [start] [--foreground]"
   end
 
   def test_listen_is_implemented_subcommand

@@ -50,6 +50,13 @@ Run against this checkout:
 KIT_CLI="$PWD/../../bin/kit" swift run KitMenuBar
 ```
 
+Or start it from the Kit CLI at the repo root:
+
+```bash
+bin/kit menubar
+bin/kit menubar --foreground
+```
+
 The helper reads `kit status --json` and `kit listen status --json`, shows a small health indicator, and exposes listen start/pause/resume/stop actions. It does not implement production packaging, login items, app signing, global shortcuts, or quick capture UI yet.
 
 ## Future Direction

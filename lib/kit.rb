@@ -9,4 +9,5 @@ end
 require_relative "kit/notifications"
 require_relative "kit/listen"
 require_relative "kit/app_bridge"
+require_relative "kit/menubar"
 require_relative "kit/cli"

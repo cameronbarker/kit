@@ -23,6 +23,7 @@ bin/kit listen help
 bin/kit listen status --json
 bin/kit status --json
 bin/kit notify "Review open commitments"
+bin/kit menubar
 ```
 
 Install runtime dependencies on a Mac with:
@@ -43,6 +44,7 @@ listen -> notice -> remember -> surface -> prepare/brief/followup -> reflect
 listen      Record and transcribe conversations
 notify      Send a simple local Kit notification
 status      Show machine-readable Kit app bridge status
+menubar     Start the macOS Kit menu bar helper
 notice      Extract commitments, decisions, risks, and open loops
 remember    Write reviewed items into Obsidian/PARA
 surface     Show what needs attention now
@@ -55,7 +57,7 @@ qmd         Manage/search the local qmd index
 
 The `listen` command is implemented as a local recording and transcription pipeline. It can list ffmpeg audio devices, run chunked background recording sessions, pause/resume/stop an active session, track recording state, show the latest recording metadata, transcribe an existing audio/video file, and re-render transcript artifacts from raw JSON. The older foreground `record` command remains available.
 
-The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier` and uses `assets/kit-icon.png` as its notification app icon. The `status --json` command exposes a stable app bridge contract for future non-CLI surfaces. Other planned commands currently return an intentional "not implemented yet" message.
+The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier` and uses `assets/kit-icon.png` as its notification app icon. The `status --json` command exposes a stable app bridge contract for future non-CLI surfaces. The `menubar` command launches the thin Swift helper in `mac/menubar/` against this checkout's `bin/kit`. Other planned commands currently return an intentional "not implemented yet" message.
 
 ## App Bridge
 

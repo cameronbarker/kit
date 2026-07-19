@@ -5,6 +5,14 @@ require "optparse"
 
 module Kit::Listen
   class CLI
+    PLANNED_COMMANDS = {
+      "start" => "Start a background recording session",
+      "pause" => "Pause the active recording",
+      "resume" => "Resume a paused recording",
+      "speakers" => "Show transcript speaker labels",
+      "rename-speaker" => "Rename a speaker and re-render"
+    }.freeze
+
     def self.run(argv)
       new(argv).run
     end
@@ -59,6 +67,9 @@ module Kit::Listen
       when "stop"
         parse_control_options!("Usage: listen stop [options]")
         run_stop
+      when *PLANNED_COMMANDS.keys
+        print_planned(command)
+        2
       when "help", "-h", "--help", nil
         print_help
         0
@@ -161,6 +172,12 @@ module Kit::Listen
       0
     end
 
+    def print_planned(command)
+      warn "kit listen #{command} is planned but not implemented yet."
+      warn PLANNED_COMMANDS.fetch(command)
+      warn "Run `kit listen help` to see the current listen command surface."
+    end
+
     def add_help_option!(opts)
       opts.on("-h", "--help", "Show help") do
         puts opts
@@ -200,9 +217,9 @@ module Kit::Listen
       puts <<~HELP
         kit listen #{VERSION}
 
-        Commands:
+        Implemented commands:
           devices                     List macOS avfoundation audio input devices
-          record [options] TITLE      Record from a Loopback/avfoundation device
+          record [options] TITLE      Record in the foreground from an audio device
           status [--json]             Show recording lifecycle state
           latest [--json]             Show newest recording metadata
           stop [--json]               Stop the active recorder process
@@ -210,6 +227,17 @@ module Kit::Listen
           render INPUT                Re-render Markdown/JSON from existing raw JSON
           help                        Show this help
           version                     Show version
+
+        Planned lifecycle commands:
+          start [options] TITLE        Start a background recording session
+          pause [options]              Pause the active recording
+          resume [options]             Resume a paused recording
+          speakers [options] INPUT     Show transcript speaker labels
+          rename-speaker INPUT RAW NAME
+                                      Rename a speaker and re-render
+      HELP
+
+      puts <<~HELP
 
         Record options:
           --device NAME               Audio device (or set #{AUDIO_DEVICE_ENV})
@@ -223,6 +251,14 @@ module Kit::Listen
         Control options:
           --json                      Machine-readable JSON for status/latest/stop
           --recordings-dir DIR        Default: recordings/
+
+        Target workflow:
+          kit listen start "Platform Sync" --transcribe-on-stop
+          kit listen pause
+          kit listen resume
+          kit listen stop --transcribe
+          kit listen transcribe latest
+          kit listen render latest
 
         Examples:
           kit listen devices

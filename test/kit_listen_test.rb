@@ -39,6 +39,29 @@ class KitListenTest < Minitest::Test
     assert_equal "kit listen #{Kit::Listen::VERSION}\n", stdout
   end
 
+  def test_kit_listen_help_includes_planned_command_surface
+    stdout, stderr, status = Open3.capture3(File.join(ROOT, "bin/kit"), "listen", "help")
+
+    assert status.success?, stderr
+    assert_includes stdout, "Implemented commands:"
+    assert_includes stdout, "Planned lifecycle commands:"
+    assert_includes stdout, "start [options] TITLE"
+    assert_includes stdout, "pause [options]"
+    assert_includes stdout, "resume [options]"
+    assert_includes stdout, "rename-speaker"
+    assert_includes stdout, "Target workflow:"
+    assert_includes stdout, 'kit listen start "Platform Sync" --transcribe-on-stop'
+  end
+
+  def test_planned_lifecycle_command_is_intentional_stub
+    stdout, stderr, status = Open3.capture3(File.join(ROOT, "bin/kit"), "listen", "pause")
+
+    assert_equal 2, status.exitstatus
+    assert_empty stdout
+    assert_includes stderr, "kit listen pause is planned but not implemented yet."
+    assert_includes stderr, "Pause the active recording"
+  end
+
   def test_kit_listen_status_uses_migrated_cli
     stdout, stderr, status = Open3.capture3(
       File.join(ROOT, "bin/kit"),

@@ -57,7 +57,7 @@ bin/kit menubar
 bin/kit menubar --foreground
 ```
 
-The helper reads `kit status --json` and `kit listen status --json`, shows a small health indicator, and exposes listen start/pause/resume/stop actions. It does not implement production packaging, login items, app signing, global shortcuts, or quick capture UI yet.
+The helper reads `kit status --json` and `kit listen status --json`, shows a small health indicator, and exposes listen start/pause/resume/stop actions. While a session is active it polls listen status, updates the status item title (`● REC`, `⏸`, `…`), and shows elapsed time plus transcription progress in the menu (mirroring the interactive CLI UX). It does not implement production packaging, login items, app signing, global shortcuts, or quick capture UI yet.
 
 ## Future Direction
 

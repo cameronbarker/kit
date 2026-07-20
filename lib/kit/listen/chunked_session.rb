@@ -144,7 +144,9 @@ module Kit::Listen
 
     def stop(on_progress: nil)
       @on_progress = on_progress
+      @persist_progress = true
       state = RecordingState.new(recordings_dir)
+      @progress_state = state
       return legacy_stop(state) unless self.class.active?(recordings_dir)
 
       metadata = active_metadata!(state)
@@ -160,6 +162,7 @@ module Kit::Listen
       metadata["phase"] = "completed"
       metadata["ended_at"] = Time.now.iso8601
       metadata["latest_error"] = nil
+      metadata["progress_message"] = nil
       write_metadata!(metadata)
       write_state!(state, metadata)
       progress("Done")
@@ -167,6 +170,9 @@ module Kit::Listen
     rescue StandardError => e
       mark_failed!(state, metadata, e.message) if metadata
       raise
+    ensure
+      @persist_progress = false
+      @progress_state = nil
     end
 
     def session_id
@@ -210,7 +216,8 @@ module Kit::Listen
         "chunks_dir" => metadata["chunks_dir"],
         "chunk_count" => Array(metadata["chunks"]).length,
         "transcript_json" => metadata["transcript_json"],
-        "transcript_md" => metadata["transcript_md"]
+        "transcript_md" => metadata["transcript_md"],
+        "progress_message" => metadata["progress_message"]
       )
     end
 
@@ -441,9 +448,22 @@ module Kit::Listen
     end
 
     def progress(message)
-      return unless @on_progress
+      if @persist_progress && @progress_state && message != "Done"
+        current = @progress_state.read
+        @progress_state.write!(current.merge("progress_message" => message))
 
-      @on_progress.call(message)
+        session_id = current["session_id"]
+        unless session_id.to_s.empty?
+          path = self.class.metadata_path_for(recordings_dir, session_id)
+          metadata = self.class.load_metadata(path)
+          if metadata
+            metadata["progress_message"] = message
+            write_metadata!(metadata)
+          end
+        end
+      end
+
+      @on_progress&.call(message)
     end
 
     def markdown(metadata, segments, generated_at)

@@ -24,6 +24,7 @@ module Kit::Listen
       chunk_count
       transcript_json
       transcript_md
+      progress_message
     ].freeze
 
     attr_reader :recordings_dir
@@ -233,7 +234,8 @@ module Kit::Listen
         "chunks_dir" => nil,
         "chunk_count" => 0,
         "transcript_json" => nil,
-        "transcript_md" => nil
+        "transcript_md" => nil,
+        "progress_message" => nil
       }
     end
 

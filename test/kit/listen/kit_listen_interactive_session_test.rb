@@ -111,6 +111,38 @@ class Kit::ListenInteractiveSessionTest < Minitest::Test
     assert_includes messages, "Transcribing chunk 1/1"
     assert_includes messages, "Merging transcript"
     assert_includes messages, "Done"
+
+    final = Kit::Listen::ChunkedSession.status(@recordings_dir)
+    assert_nil final["progress_message"]
+  end
+
+  def test_stop_persists_progress_message_to_status
+    session = Kit::Listen::ChunkedSession.new(
+      title: "Status Progress",
+      device: "Loopback Audio",
+      recordings_dir: @recordings_dir,
+      transcripts_dir: @transcripts_dir,
+      mock: true,
+      dry_run: true
+    )
+    session.start
+
+    captured = []
+    Kit::Listen::ChunkedSession.stop(
+      @recordings_dir,
+      transcripts_dir: @transcripts_dir,
+      mock: true,
+      on_progress: lambda { |message|
+        captured << [
+          message,
+          Kit::Listen::ChunkedSession.status(@recordings_dir)["progress_message"]
+        ]
+      }
+    )
+
+    assert_includes captured, ["Stopping recorder", "Stopping recorder"]
+    assert captured.any? { |message, persisted| message == "Transcribing chunk 1/1" && persisted == "Transcribing chunk 1/1" }
+    assert_nil Kit::Listen::ChunkedSession.status(@recordings_dir)["progress_message"]
   end
 
   private

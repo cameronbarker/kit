@@ -159,6 +159,42 @@ class Kit::ListenCLITest < Minitest::Test
     assert_equal stop_keys.sort, parse_json_stdout(stdout).keys.sort
   end
 
+  def test_chunked_start_accepts_positional_device
+    recordings_dir = File.join(@tmpdir, "recordings")
+
+    status, stdout, stderr = capture_json_cli(
+      "start",
+      "Base",
+      "--json",
+      "--dry-run",
+      "--recordings-dir", recordings_dir,
+      "Meeting"
+    )
+    assert_equal 0, status, stderr
+    started = parse_json_stdout(stdout)
+    assert_equal "started", started["action"]
+    assert_equal "recording", started["phase"]
+
+    meta = YAML.safe_load(File.read(started["metadata_path"]))
+    assert_equal "Base", meta["source_device"]
+    assert_equal "Meeting", meta["title"]
+  ensure
+    Kit::Listen::CLI.run(["stop", "--json", "--mock", "--recordings-dir", recordings_dir])
+  end
+
+  def test_chunked_start_rejects_device_twice
+    status, _stdout, stderr = capture_json_cli(
+      "start",
+      "Base",
+      "--device", "Other",
+      "--json",
+      "--dry-run",
+      "Meeting"
+    )
+    assert_equal 1, status
+    assert_match(/device specified twice/, stderr)
+  end
+
   def test_chunked_start_pause_resume_stop_dry_run_merges_transcript
     recordings_dir = File.join(@tmpdir, "recordings")
     transcripts_dir = File.join(@tmpdir, "transcripts")

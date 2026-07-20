@@ -25,6 +25,7 @@ module Kit::Listen
         recordings_dir: DEFAULT_RECORDINGS_DIR,
         device: nil,
         json: false,
+        detach: false,
         chunk_seconds: DEFAULT_CHUNK_SECONDS
       }
     end
@@ -58,8 +59,8 @@ module Kit::Listen
         ).record
       when "start"
         parse_start_options!
-        title = required_title!
-        payload = ChunkedSession.new(
+        title = parse_start_device_and_title!
+        session = ChunkedSession.new(
           title: title,
           device: @options[:device],
           recordings_dir: @options[:recordings_dir],
@@ -67,8 +68,17 @@ module Kit::Listen
           chunk_seconds: @options[:chunk_seconds],
           mock: @options[:mock],
           dry_run: @options[:dry_run]
-        ).start
-        print_control_payload(payload)
+        )
+        if InteractiveSession.interactive?(json: @options[:json], detach: @options[:detach])
+          InteractiveSession.new(
+            session: session,
+            recordings_dir: @options[:recordings_dir],
+            transcripts_dir: @options[:transcripts_dir]
+          ).run
+        else
+          payload = session.start
+          print_control_payload(payload)
+        end
       when "pause"
         parse_control_options!("Usage: listen pause [options]")
         payload = ChunkedSession.pause(@options[:recordings_dir])
@@ -144,7 +154,7 @@ module Kit::Listen
     end
 
     def parse_start_options!
-      parse_options!("Usage: kit listen start [options] TITLE") do |opts|
+      parse_options!("Usage: kit listen start [options] [DEVICE] TITLE") do |opts|
         opts.on("--device NAME", "avfoundation audio device name") { |name| @options[:device] = name }
         opts.on("--chunk-seconds SECONDS", Integer, "Chunk duration in seconds (default: #{DEFAULT_CHUNK_SECONDS})") do |seconds|
           @options[:chunk_seconds] = seconds
@@ -152,9 +162,24 @@ module Kit::Listen
         opts.on("--mock", "With stop transcription, use mock Python worker") { @options[:mock] = true }
         opts.on("--dry-run", "Write placeholder chunks without ffmpeg capture") { @options[:dry_run] = true }
         opts.on("--json", "Emit machine-readable JSON") { @options[:json] = true }
+        opts.on("--detach", "Start in background and return immediately") { @options[:detach] = true }
         add_recordings_dir_option!(opts)
         add_transcripts_dir_option!(opts, "Transcripts root used on stop")
       end
+    end
+
+    def parse_start_device_and_title!
+      if @argv.length >= 2
+        positional_device = @argv.shift.to_s.strip
+        raise Error, "missing DEVICE" if positional_device.empty?
+        unless @options[:device].to_s.strip.empty?
+          raise Error, "device specified twice; use `start DEVICE TITLE` or `--device NAME`, not both"
+        end
+
+        @options[:device] = positional_device
+      end
+
+      required_title!
     end
 
     def parse_control_options!(banner)
@@ -264,7 +289,11 @@ module Kit::Listen
 
         Implemented commands:
           devices                     List macOS avfoundation audio input devices
-          start [options] TITLE       Start a background chunked recording session
+          start [options] [DEVICE] TITLE
+                                      Start a background chunked recording session
+                                      Interactive in a TTY (p pause, s stop); use
+                                      --json or --detach for fire-and-forget
+                                      Example: kit listen start Base "Meeting"
           pause [options]             Pause the active chunked recording
           resume [options]            Resume a paused chunked recording
           record [options] TITLE      Record in the foreground from an audio device
@@ -295,21 +324,24 @@ module Kit::Listen
 
         Control options:
           --json                      Machine-readable JSON for status/latest/stop
+          --detach                    Start recording and return immediately
           --mock                      Use mock Python worker when command transcribes
           --dry-run                   Placeholder chunk behavior where supported
           --recordings-dir DIR        Default: recordings/
           --transcripts-dir DIR       Used when command transcribes
 
         Target workflow:
-          kit listen start "Platform Sync"
-          kit listen pause
-          kit listen resume
+          kit listen start Base "Platform Sync"
+          # p = pause/resume, s = stop + transcribe
           kit listen stop
           kit listen transcribe latest
           kit listen render latest
 
         Examples:
           kit listen devices
+          kit listen start Base "Meeting"
+          kit listen start Base --json "Meeting"
+          kit listen start Base --detach "Meeting"
           kit listen record "Platform Sync" --device "Loopback Audio"
           kit listen record "Platform Sync" --format m4a --transcribe
           kit listen status --json

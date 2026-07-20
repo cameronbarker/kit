@@ -7,3 +7,7 @@ __pycache__/
 .env
 .DS_Store
 mac/menubar/.build/
+
+# Obsidian vault notes — keep only settings
+obsidian/*
+!obsidian/.obsidian/

@@ -128,4 +128,55 @@ class Kit::ListenPipelineTest < Minitest::Test
     assert_includes markdown, "[00:01:12] Cameron:"
     refute_includes markdown, "# stale"
   end
+
+  def test_progress_callback_only_forwards_kit_listen_stages
+    messages = []
+    pipe = Kit::Listen::Pipeline.new(
+      input: @input,
+      transcripts_dir: @transcripts_dir,
+      mock: true,
+      quiet: true,
+      on_progress: ->(message) { messages << message }
+    )
+
+    pipe.send(:handle_worker_stderr_line, "kit-listen:Transcribing")
+    pipe.send(:handle_worker_stderr_line, "Lightning automatically upgraded your loaded checkpoint")
+    pipe.send(:handle_worker_stderr_line, "[W NNPACK.cpp:64] Could not initialize NNPACK!")
+    pipe.send(:handle_worker_stderr_line, "kit-listen:Diarizing")
+
+    assert_equal ["Transcribing", "Diarizing"], messages
+  end
+
+  def test_python_executable_prefers_explicit_env
+    pipe = pipeline
+    original = ENV["PYTHON"]
+    ENV["PYTHON"] = "/custom/python"
+    assert_equal "/custom/python", pipe.send(:python_executable)
+  ensure
+    if original.nil?
+      ENV.delete("PYTHON")
+    else
+      ENV["PYTHON"] = original
+    end
+  end
+
+  def test_python_executable_falls_back_to_repo_venv_or_python3
+    pipe = pipeline
+    original = ENV["PYTHON"]
+    ENV.delete("PYTHON")
+
+    expected_venv = File.join(Kit::Listen::ROOT, ".venv", "bin", "python")
+    resolved = pipe.send(:python_executable)
+    if File.executable?(expected_venv)
+      assert_equal expected_venv, resolved
+    else
+      assert_equal "python3", resolved
+    end
+  ensure
+    if original.nil?
+      ENV.delete("PYTHON")
+    else
+      ENV["PYTHON"] = original
+    end
+  end
 end

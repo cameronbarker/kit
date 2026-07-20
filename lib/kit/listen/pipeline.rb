@@ -8,12 +8,16 @@ require "yaml"
 
 module Kit::Listen
   class Pipeline
+    PROGRESS_PREFIX = "kit-listen:"
+
     attr_reader :input_path, :transcripts_dir, :mock
 
-    def initialize(input:, transcripts_dir: DEFAULT_TRANSCRIPTS_DIR, mock: false)
+    def initialize(input:, transcripts_dir: DEFAULT_TRANSCRIPTS_DIR, mock: false, quiet: false, on_progress: nil)
       @input_path = File.expand_path(input)
       @transcripts_dir = File.expand_path(transcripts_dir)
       @mock = mock
+      @quiet = quiet
+      @on_progress = on_progress
     end
 
     def transcribe
@@ -21,7 +25,7 @@ module Kit::Listen
       ensure_directories!
       run_python_worker!
       finalize_from_raw!
-      print_success("transcribe")
+      print_success("transcribe") unless @quiet
       0
     end
 
@@ -31,7 +35,7 @@ module Kit::Listen
       raise Error, "raw JSON not found: #{raw_json_path}" unless File.file?(raw_json_path)
 
       finalize_from_raw!
-      print_success("render")
+      print_success("render") unless @quiet
       0
     end
 
@@ -72,17 +76,63 @@ module Kit::Listen
     end
 
     def run_python_worker!
-      python = ENV.fetch("PYTHON", "python3")
-      args = [python, PYTHON_WORKER, "--input", input_path, "--output", raw_json_path]
+      args = [python_executable, PYTHON_WORKER, "--input", input_path, "--output", raw_json_path]
       args << "--mock" if mock
 
-      stdout, stderr, status = Open3.capture3(*args)
-      warn stderr unless stderr.to_s.strip.empty?
+      stdout = +""
+      stderr_lines = []
+      status = nil
+
+      Open3.popen3(*args) do |stdin, out, err, wait_thr|
+        stdin.close
+        err_thread = Thread.new do
+          err.each_line do |line|
+            text = line.strip
+            next if text.empty?
+
+            stderr_lines << text
+            handle_worker_stderr_line(text)
+          end
+        end
+        stdout = out.read.to_s
+        err_thread.join
+        status = wait_thr.value
+      end
+
       unless status.success?
-        detail = [stdout, stderr].map { |s| s.to_s.strip }.reject(&:empty?).join("\n")
+        detail = [stdout, stderr_lines.join("\n")].map { |s| s.to_s.strip }.reject(&:empty?).join("\n")
         raise Error, "Python worker failed (exit #{status.exitstatus}).#{detail.empty? ? '' : "\n#{detail}"}"
       end
       raise Error, "Python worker did not create raw JSON: #{raw_json_path}" unless File.file?(raw_json_path)
+    end
+
+    def handle_worker_stderr_line(text)
+      if text.start_with?(PROGRESS_PREFIX)
+        message = text.delete_prefix(PROGRESS_PREFIX).strip
+        return if message.empty?
+
+        if @on_progress
+          @on_progress.call(message)
+        elsif !@quiet
+          warn message
+        end
+        return
+      end
+
+      # Drop library noise (Lightning, NNPACK, UserWarning, …) from the UX.
+      return if @on_progress || @quiet
+
+      warn text
+    end
+
+    def python_executable
+      explicit = ENV["PYTHON"].to_s.strip
+      return explicit unless explicit.empty?
+
+      venv_python = File.join(ROOT, ".venv", "bin", "python")
+      return venv_python if File.executable?(venv_python)
+
+      "python3"
     end
 
     def finalize_from_raw!

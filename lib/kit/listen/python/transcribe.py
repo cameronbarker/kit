@@ -41,23 +41,57 @@ def fail(message: str, code: int = 1) -> None:
     raise SystemExit(code)
 
 
+def progress(message: str) -> None:
+    # Prefixed so Ruby can relay stages without Lightning/pyannote warning noise.
+    print(f"kit-listen:{message}", file=sys.stderr, flush=True)
+
+
+def configure_runtime_defaults() -> None:
+    """Apply process defaults so transcription works without a scavenger hunt of env vars.
+
+    x86 torch under Rosetta on Apple Silicon commonly deadlocks with OpenMP /
+    MPS thread pools. Cap BLAS/OpenMP threads unless the caller already set them.
+    """
+    for key in (
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+    ):
+        os.environ.setdefault(key, "1")
+
+
 def configure_model_cache(*, offline: bool | None = None) -> Path:
     """Keep model downloads inside the repo so the project stays self-contained.
 
     Defaults Hugging Face and torch caches to <repo>/.cache/ unless the caller
-    already set them. Offline is the default: transcription never touches the
-    network and reads models from the warmed cache. Opt back into network access
-    with LISTEN_OFFLINE=0 (needed only to download new models). Pass offline=False
+    already set them. If pyannote models only exist under ~/.cache/torch (common
+    after a system-wide prefetch), reuse that TORCH_HOME instead of requiring
+    LISTEN_OFFLINE=0 / TORCH_HOME exports.
+
+    Offline is the default: transcription never touches the network and reads
+    models from the warmed cache. Opt back into network access with
+    LISTEN_OFFLINE=0 (needed only to download new models). Pass offline=False
     to force network access regardless of the env var (used by prefetch).
 
     Must run before any torch / whisperx / huggingface import so the env vars
     take effect.
     """
+    configure_runtime_defaults()
+
     root = Path(__file__).resolve().parents[4]
     cache_root = Path(os.environ.get("LISTEN_CACHE_DIR", root / ".cache"))
+    repo_torch = cache_root / "torch"
+    home_torch = Path.home() / ".cache" / "torch"
 
     os.environ.setdefault("HF_HOME", str(cache_root / "huggingface"))
-    os.environ.setdefault("TORCH_HOME", str(cache_root / "torch"))
+    if "TORCH_HOME" not in os.environ:
+        repo_pyannote = repo_torch / "pyannote"
+        home_pyannote = home_torch / "pyannote"
+        if not repo_pyannote.exists() and home_pyannote.exists():
+            os.environ["TORCH_HOME"] = str(home_torch)
+        else:
+            os.environ["TORCH_HOME"] = str(repo_torch)
 
     if offline is None:
         offline = os.environ.get("LISTEN_OFFLINE", "1") != "0"
@@ -106,6 +140,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def resolve_device(requested: str) -> str:
     if requested != "auto":
         return requested
+    # WhisperX/pyannote + Rosetta x86 torch on Apple Silicon deadlocks on MPS.
+    # Prefer CPU on macOS unless the caller explicitly set --device / WHISPERX_DEVICE.
+    if sys.platform == "darwin":
+        return "cpu"
     try:
         import torch
 
@@ -185,12 +223,16 @@ def run_whisperx(
     compute_type = resolve_compute_type(compute_type, device)
 
     try:
+        progress("Loading audio")
         audio = whisperx.load_audio(str(input_path))
+        progress("Loading models")
         model = whisperx.load_model(
             model_name, device, compute_type=compute_type, language=language
         )
+        progress("Transcribing")
         result = model.transcribe(audio, batch_size=8)
 
+        progress("Aligning")
         align_model, metadata = whisperx.load_align_model(
             language_code=result.get("language", language), device=device
         )
@@ -204,6 +246,7 @@ def run_whisperx(
         )
 
         # WhisperX API has shifted across versions; try common diarization entry points.
+        progress("Diarizing")
         diarize_segments = None
         if hasattr(whisperx, "DiarizationPipeline"):
             diarize_model = whisperx.DiarizationPipeline(
@@ -240,6 +283,7 @@ def run_whisperx(
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_runtime_defaults()
     args = parse_args(argv)
     input_path = Path(args.input).expanduser().resolve()
     output_path = Path(args.output).expanduser().resolve()
@@ -248,6 +292,7 @@ def main(argv: list[str] | None = None) -> int:
         fail(f"Input file not found: {input_path}")
 
     if args.mock:
+        progress("Mock transcription")
         payload = mock_payload(input_path)
     else:
         configure_model_cache()

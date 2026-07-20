@@ -46,8 +46,8 @@ module Kit::Listen
       new(recordings_dir: recordings_dir, mock: mock, dry_run: dry_run).resume
     end
 
-    def self.stop(recordings_dir, transcripts_dir: DEFAULT_TRANSCRIPTS_DIR, mock: false)
-      new(recordings_dir: recordings_dir, transcripts_dir: transcripts_dir, mock: mock).stop
+    def self.stop(recordings_dir, transcripts_dir: DEFAULT_TRANSCRIPTS_DIR, mock: false, on_progress: nil)
+      new(recordings_dir: recordings_dir, transcripts_dir: transcripts_dir, mock: mock).stop(on_progress: on_progress)
     end
 
     def initialize(
@@ -142,11 +142,13 @@ module Kit::Listen
       action_payload("resumed", metadata)
     end
 
-    def stop
+    def stop(on_progress: nil)
+      @on_progress = on_progress
       state = RecordingState.new(recordings_dir)
       return legacy_stop(state) unless self.class.active?(recordings_dir)
 
       metadata = active_metadata!(state)
+      progress("Stopping recorder")
       stop_recorder(metadata) if metadata["phase"] == "recording"
       metadata["phase"] = "transcribing"
       metadata["recorder_pid"] = nil
@@ -160,6 +162,7 @@ module Kit::Listen
       metadata["latest_error"] = nil
       write_metadata!(metadata)
       write_state!(state, metadata)
+      progress("Done")
       action_payload("completed", metadata)
     rescue StandardError => e
       mark_failed!(state, metadata, e.message) if metadata
@@ -392,9 +395,17 @@ module Kit::Listen
       FileUtils.mkdir_p(File.join(transcripts_dir, "md"))
       merged_segments = []
       offset = 0.0
+      total = chunks.length
 
-      chunks.each do |chunk|
-        pipeline = Pipeline.new(input: chunk["path"], transcripts_dir: transcripts_dir, mock: mock || metadata["mock"])
+      chunks.each_with_index do |chunk, index|
+        progress("Transcribing chunk #{index + 1}/#{total}")
+        pipeline = Pipeline.new(
+          input: chunk["path"],
+          transcripts_dir: transcripts_dir,
+          mock: mock || metadata["mock"],
+          quiet: true,
+          on_progress: @on_progress
+        )
         silence_stdout { pipeline.transcribe }
         final = JSON.parse(File.read(pipeline.final_json_path))
         Array(final["segments"]).each do |segment|
@@ -408,6 +419,7 @@ module Kit::Listen
         offset += chunk["duration_seconds"].to_f
       end
 
+      progress("Merging transcript")
       generated_at = Time.now.iso8601
       final_json = File.join(transcripts_dir, "json", "#{metadata['session_id']}.json")
       final_md = File.join(transcripts_dir, "md", "#{metadata['session_id']}.md")
@@ -426,6 +438,12 @@ module Kit::Listen
       metadata["transcribed"] = true
       metadata["transcript_json"] = final_json
       metadata["transcript_md"] = final_md
+    end
+
+    def progress(message)
+      return unless @on_progress
+
+      @on_progress.call(message)
     end
 
     def markdown(metadata, segments, generated_at)

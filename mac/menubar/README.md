@@ -11,7 +11,7 @@ Current bridge entry points:
 ```bash
 kit status --json
 kit listen status --json
-kit listen start --json "Menubar Listen"
+kit listen start Base --json "Menubar Listen"
 kit listen pause --json
 kit listen resume --json
 kit listen stop --json

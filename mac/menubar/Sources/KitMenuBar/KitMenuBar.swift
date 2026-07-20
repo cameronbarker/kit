@@ -187,7 +187,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func startListen() {
-        runListenCommand(["listen", "start", "--json", "Menubar Listen"])
+        var arguments = ["listen", "start"]
+        if let device = ProcessInfo.processInfo.environment["KIT_LISTEN_AUDIO_DEVICE"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !device.isEmpty {
+            arguments.append(device)
+        }
+        arguments.append(contentsOf: ["--json", "Menubar Listen"])
+        runListenCommand(arguments)
     }
 
     @objc private func pauseListen() {

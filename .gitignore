@@ -3,6 +3,7 @@ recordings/
 transcripts/
 .cache/
 .venv/
+__pycache__/
 .env
 .DS_Store
 mac/menubar/.build/

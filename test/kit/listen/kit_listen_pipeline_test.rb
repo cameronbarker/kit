@@ -58,6 +58,14 @@ class Kit::ListenPipelineTest < Minitest::Test
     assert_equal "SPEAKER_00", map["SPEAKER_00"]
     assert_equal "SPEAKER_01", map["SPEAKER_01"]
 
+    speaker_map = File.read(map_path)
+    assert_includes speaker_map, "# Speaker samples help identify who each raw label refers to."
+    assert_includes speaker_map, "# SPEAKER_00 samples:"
+    assert_includes speaker_map, "# - [00:01:12] I'll follow up with DevOps and confirm the migration window."
+    assert_includes speaker_map, "SPEAKER_00: SPEAKER_00"
+    assert_includes speaker_map, "# SPEAKER_01 samples:"
+    assert_includes speaker_map, "# - [00:01:18] Great, I'll update the rollout plan once you confirm."
+
     final = JSON.parse(File.read(json_path))
     assert_equal "Platform Sync", final["title"]
     assert_equal @input, final["source_file"]
@@ -97,6 +105,36 @@ class Kit::ListenPipelineTest < Minitest::Test
     markdown = File.read(pipe.markdown_path)
     assert_includes markdown, "[00:01:12] Cameron:"
     assert_includes markdown, "[00:01:18] Rachel:"
+  end
+
+  def test_rename_speaker_updates_map_and_rerenders
+    pipe = pipeline
+    assert_equal 0, pipe.transcribe
+
+    assert_equal 0, pipe.rename_speaker("SPEAKER_00", "Cameron")
+
+    map = YAML.safe_load(File.read(pipe.speaker_map_path))
+    assert_equal "Cameron", map["SPEAKER_00"]
+    assert_equal "SPEAKER_01", map["SPEAKER_01"]
+
+    final = JSON.parse(File.read(pipe.final_json_path))
+    assert_equal "Cameron", final["segments"][0]["speaker"]
+    assert_equal "SPEAKER_00", final["segments"][0]["raw_speaker"]
+
+    markdown = File.read(pipe.markdown_path)
+    assert_includes markdown, "[00:01:12] Cameron:"
+  end
+
+  def test_speakers_returns_names_and_samples
+    pipe = pipeline
+    assert_equal 0, pipe.transcribe
+
+    speakers = pipe.speakers
+    assert_equal 2, speakers.length
+    assert_equal "SPEAKER_00", speakers[0]["raw_speaker"]
+    assert_equal "SPEAKER_00", speakers[0]["name"]
+    assert_equal "00:01:12", speakers[0]["samples"][0]["timestamp"]
+    assert_equal "I'll follow up with DevOps and confirm the migration window.", speakers[0]["samples"][0]["text"]
   end
 
   def test_render_rebuilds_from_raw_without_python

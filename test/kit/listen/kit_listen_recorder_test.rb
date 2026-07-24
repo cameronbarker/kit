@@ -32,23 +32,37 @@ class Kit::ListenRecorderTest < Minitest::Test
   end
 
   def test_resolve_device_prefers_cli_over_env
-    with_env("LEADERSHIP_TRANSCRIPTS_AUDIO_DEVICE", "Env Device") do
-      assert_equal "CLI Device", Kit::Listen::Recorder.resolve_device("CLI Device")
+    with_env("KIT_LISTEN_AUDIO_DEVICE", "Current Env Device") do
+      with_env("LEADERSHIP_TRANSCRIPTS_AUDIO_DEVICE", "Legacy Env Device") do
+        assert_equal "CLI Device", Kit::Listen::Recorder.resolve_device("CLI Device")
+      end
     end
   end
 
   def test_resolve_device_uses_env_when_cli_missing
-    with_env("LEADERSHIP_TRANSCRIPTS_AUDIO_DEVICE", "Env Device") do
-      assert_equal "Env Device", Kit::Listen::Recorder.resolve_device(nil)
+    with_env("KIT_LISTEN_AUDIO_DEVICE", "Env Device") do
+      with_env("LEADERSHIP_TRANSCRIPTS_AUDIO_DEVICE", "Legacy Env Device") do
+        assert_equal "Env Device", Kit::Listen::Recorder.resolve_device(nil)
+      end
+    end
+  end
+
+  def test_resolve_device_uses_legacy_env_when_current_env_missing
+    with_env("KIT_LISTEN_AUDIO_DEVICE", nil) do
+      with_env("LEADERSHIP_TRANSCRIPTS_AUDIO_DEVICE", "Env Device") do
+        assert_equal "Env Device", Kit::Listen::Recorder.resolve_device(nil)
+      end
     end
   end
 
   def test_resolve_device_raises_when_missing
-    with_env("LEADERSHIP_TRANSCRIPTS_AUDIO_DEVICE", nil) do
-      error = assert_raises(Kit::Listen::Error) do
-        Kit::Listen::Recorder.resolve_device(nil)
+    with_env("KIT_LISTEN_AUDIO_DEVICE", nil) do
+      with_env("LEADERSHIP_TRANSCRIPTS_AUDIO_DEVICE", nil) do
+        error = assert_raises(Kit::Listen::Error) do
+          Kit::Listen::Recorder.resolve_device(nil)
+        end
+        assert_match(/No audio device configured/, error.message)
       end
-      assert_match(/No audio device configured/, error.message)
     end
   end
 

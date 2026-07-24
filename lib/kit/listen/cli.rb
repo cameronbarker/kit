@@ -5,11 +5,6 @@ require "optparse"
 
 module Kit::Listen
   class CLI
-    PLANNED_COMMANDS = {
-      "speakers" => "Show transcript speaker labels",
-      "rename-speaker" => "Rename a speaker and re-render"
-    }.freeze
-
     def self.run(argv)
       new(argv).run
     end
@@ -41,6 +36,16 @@ module Kit::Listen
         parse_render_options!
         input = required_input!
         Pipeline.new(input: input, transcripts_dir: @options[:transcripts_dir], mock: false).render
+      when "speakers"
+        parse_speakers_options!
+        input = required_input!
+        run_speakers(input)
+      when "rename-speaker"
+        parse_rename_speaker_options!
+        input = required_positional!("INPUT path")
+        raw_speaker = required_positional!("RAW speaker label")
+        name = required_remaining!("NAME")
+        Pipeline.new(input: input, transcripts_dir: @options[:transcripts_dir], mock: false).rename_speaker(raw_speaker, name)
       when "devices"
         parse_devices_options!
         Recorder.list_devices
@@ -100,9 +105,6 @@ module Kit::Listen
       when "stop"
         parse_control_options!("Usage: listen stop [options]")
         run_stop
-      when *PLANNED_COMMANDS.keys
-        print_planned(command)
-        2
       when "help", "-h", "--help", nil
         print_help
         0
@@ -130,6 +132,19 @@ module Kit::Listen
 
     def parse_render_options!
       parse_options!("Usage: kit listen render [options] INPUT") do |opts|
+        add_transcripts_dir_option!(opts, "Output root (default: transcripts/)")
+      end
+    end
+
+    def parse_speakers_options!
+      parse_options!("Usage: kit listen speakers [options] INPUT") do |opts|
+        opts.on("--json", "Emit machine-readable JSON") { @options[:json] = true }
+        add_transcripts_dir_option!(opts, "Output root (default: transcripts/)")
+      end
+    end
+
+    def parse_rename_speaker_options!
+      parse_options!("Usage: kit listen rename-speaker [options] INPUT RAW NAME") do |opts|
         add_transcripts_dir_option!(opts, "Output root (default: transcripts/)")
       end
     end
@@ -233,6 +248,34 @@ module Kit::Listen
       print_control_payload(payload)
     end
 
+    def run_speakers(input)
+      pipeline = Pipeline.new(input: input, transcripts_dir: @options[:transcripts_dir], mock: false)
+      speakers = pipeline.speakers
+      payload = {
+        "input" => File.expand_path(input),
+        "speaker_map" => pipeline.speaker_map_path,
+        "transcript_json" => pipeline.final_json_path,
+        "transcript_md" => pipeline.markdown_path,
+        "speakers" => speakers
+      }
+
+      if @options[:json]
+        puts JSON.pretty_generate(payload)
+      else
+        puts "Transcript: #{pipeline.markdown_path}"
+        puts "Speaker map: #{pipeline.speaker_map_path}"
+        puts
+        speakers.each do |speaker|
+          puts "#{speaker['raw_speaker']} -> #{speaker['name']}"
+          speaker["samples"].each do |sample|
+            puts "  [#{sample['timestamp']}] #{sample['text']}"
+          end
+          puts
+        end
+      end
+      0
+    end
+
     def print_control_payload(payload)
       if @options[:json]
         puts JSON.pretty_generate(payload)
@@ -240,12 +283,6 @@ module Kit::Listen
         puts "#{payload['action']} phase=#{payload['phase']} #{payload['message']}"
       end
       0
-    end
-
-    def print_planned(command)
-      warn "kit listen #{command} is planned but not implemented yet."
-      warn PLANNED_COMMANDS.fetch(command)
-      warn "Run `kit listen help` to see the current listen command surface."
     end
 
     def add_help_option!(opts)
@@ -275,6 +312,21 @@ module Kit::Listen
       required_arg!("TITLE")
     end
 
+    def required_positional!(label)
+      value = @argv.shift
+      raise Error, "missing #{label}" if value.nil? || value.strip.empty?
+
+      value
+    end
+
+    def required_remaining!(label)
+      value = @argv.join(" ").strip
+      raise Error, "missing #{label}" if value.empty?
+
+      @argv.clear
+      value
+    end
+
     def required_arg!(label)
       value = @argv.shift
       raise Error, "missing #{label}" if value.nil? || value.strip.empty?
@@ -302,13 +354,11 @@ module Kit::Listen
           stop [--json]               Stop the active recorder process
           transcribe [--mock] INPUT   Transcribe a meeting audio/video file
           render INPUT                Re-render Markdown/JSON from existing raw JSON
-          help                        Show this help
-          version                     Show version
-
-        Planned transcript commands:
-          speakers [options] INPUT     Show transcript speaker labels
+          speakers [options] INPUT    Show transcript speaker labels and samples
           rename-speaker INPUT RAW NAME
                                       Rename a speaker and re-render
+          help                        Show this help
+          version                     Show version
       HELP
 
       puts <<~HELP

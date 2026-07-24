@@ -52,6 +52,79 @@ class Kit::ListenCLITest < Minitest::Test
     assert File.file?(File.join(@transcripts_dir, "md", "platform-sync.md"))
   end
 
+  def test_speakers_command_shows_map_and_samples
+    assert_equal 0, Kit::Listen::CLI.run(
+      [
+        "transcribe",
+        "--mock",
+        "--transcripts-dir",
+        @transcripts_dir,
+        @input
+      ]
+    )
+
+    status, stdout, stderr = capture_json_cli(
+      "speakers",
+      "--transcripts-dir", @transcripts_dir,
+      @input
+    )
+    assert_equal 0, status, stderr
+    assert_includes stdout, "Speaker map: #{File.join(@transcripts_dir, 'maps', 'platform-sync.speaker-map.yml')}"
+    assert_includes stdout, "SPEAKER_00 -> SPEAKER_00"
+    assert_includes stdout, "[00:01:12] I'll follow up with DevOps and confirm the migration window."
+  end
+
+  def test_speakers_command_emits_json
+    assert_equal 0, Kit::Listen::CLI.run(
+      [
+        "transcribe",
+        "--mock",
+        "--transcripts-dir",
+        @transcripts_dir,
+        @input
+      ]
+    )
+
+    status, stdout, stderr = capture_json_cli(
+      "speakers",
+      "--json",
+      "--transcripts-dir", @transcripts_dir,
+      @input
+    )
+    assert_equal 0, status, stderr
+    payload = parse_json_stdout(stdout)
+    assert_equal File.join(@transcripts_dir, "maps", "platform-sync.speaker-map.yml"), payload["speaker_map"]
+    assert_equal "SPEAKER_00", payload["speakers"][0]["raw_speaker"]
+    assert_equal "00:01:12", payload["speakers"][0]["samples"][0]["timestamp"]
+  end
+
+  def test_rename_speaker_command_updates_map_and_rerenders
+    assert_equal 0, Kit::Listen::CLI.run(
+      [
+        "transcribe",
+        "--mock",
+        "--transcripts-dir",
+        @transcripts_dir,
+        @input
+      ]
+    )
+
+    status, _stdout, stderr = capture_json_cli(
+      "rename-speaker",
+      "--transcripts-dir", @transcripts_dir,
+      @input,
+      "SPEAKER_00",
+      "Cameron"
+    )
+    assert_equal 0, status, stderr
+
+    map = YAML.safe_load(File.read(File.join(@transcripts_dir, "maps", "platform-sync.speaker-map.yml")))
+    assert_equal "Cameron", map["SPEAKER_00"]
+
+    markdown = File.read(File.join(@transcripts_dir, "md", "platform-sync.md"))
+    assert_includes markdown, "[00:01:12] Cameron:"
+  end
+
   def test_dry_run_record_with_transcribe_mock_updates_metadata
     recordings_dir = File.join(@tmpdir, "recordings")
     status = Kit::Listen::CLI.run(
@@ -142,6 +215,7 @@ class Kit::ListenCLITest < Minitest::Test
       phase recorder_pid title source_device recording_path
       metadata_path started_at ended_at latest_error
       session_id chunks_dir chunk_count transcript_json transcript_md
+      progress_message
     ]
     latest_keys = %w[found metadata_path recording]
     stop_keys = %w[ok action message phase recorder_pid]

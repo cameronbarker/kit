@@ -45,17 +45,24 @@ class KitListenTest < Minitest::Test
 
     assert status.success?, stderr
     assert_includes stdout, "Implemented commands:"
-    assert_includes stdout, "Planned transcript commands:"
-    assert_includes stdout, "start [options] TITLE"
+    refute_includes stdout, "Planned transcript commands:"
+    assert_includes stdout, "start [options] [DEVICE] TITLE"
     assert_includes stdout, "pause [options]"
     assert_includes stdout, "resume [options]"
+    assert_includes stdout, "speakers [options] INPUT"
     assert_includes stdout, "rename-speaker"
     assert_includes stdout, "Target workflow:"
-    assert_includes stdout, 'kit listen start "Platform Sync"'
+    assert_includes stdout, 'kit listen start Base "Platform Sync"'
   end
 
   def test_pause_without_active_session_reports_error
-    stdout, stderr, status = Open3.capture3(File.join(ROOT, "bin/kit"), "listen", "pause")
+    stdout, stderr, status = Open3.capture3(
+      File.join(ROOT, "bin/kit"),
+      "listen",
+      "pause",
+      "--recordings-dir",
+      File.join(@tmpdir, "recordings")
+    )
 
     assert_equal 1, status.exitstatus
     assert_empty stdout

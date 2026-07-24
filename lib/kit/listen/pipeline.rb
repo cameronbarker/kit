@@ -63,6 +63,58 @@ module Kit::Listen
       File.join(transcripts_dir, "maps", "#{slug}.speaker-map.yml")
     end
 
+    def speakers
+      validate_input!
+      ensure_directories!
+      raise Error, "raw JSON not found: #{raw_json_path}" unless File.file?(raw_json_path)
+
+      raw = load_raw_json
+      segments = Array(raw["segments"])
+      raise Error, "raw JSON missing segments array" unless segments.is_a?(Array)
+
+      map = load_or_create_speaker_map(segments)
+      labels = segments.map { |s| s["speaker"].to_s }.reject(&:empty?).uniq.sort
+      labels.map do |label|
+        {
+          "raw_speaker" => label,
+          "name" => map.fetch(label, label),
+          "samples" => sample_segments(label, segments, limit: 3).map do |segment|
+            {
+              "timestamp" => format_timestamp(segment["start"]),
+              "text" => segment["text"].to_s.strip
+            }
+          end
+        }
+      end
+    end
+
+    def rename_speaker(raw_speaker, name)
+      validate_input!
+      ensure_directories!
+      raise Error, "raw JSON not found: #{raw_json_path}" unless File.file?(raw_json_path)
+
+      raw = load_raw_json
+      segments = Array(raw["segments"])
+      raise Error, "raw JSON missing segments array" unless segments.is_a?(Array)
+
+      label = raw_speaker.to_s.strip
+      display_name = name.to_s.strip
+      raise Error, "missing RAW speaker label" if label.empty?
+      raise Error, "missing NAME" if display_name.empty?
+
+      map = load_or_create_speaker_map(segments)
+      unless map.key?(label)
+        known = map.keys.sort.join(", ")
+        raise Error, "unknown speaker label #{label.inspect}#{known.empty? ? '' : " (known: #{known})"}"
+      end
+
+      map[label] = display_name
+      write_speaker_map!(map, segments)
+      finalize_from_raw!
+      print_success("rename-speaker") unless @quiet
+      0
+    end
+
     private
 
     def validate_input!
@@ -159,13 +211,76 @@ module Kit::Listen
         map = YAML.safe_load(File.read(speaker_map_path), permitted_classes: [Symbol]) || {}
         raise Error, "speaker map must be a YAML mapping: #{speaker_map_path}" unless map.is_a?(Hash)
 
-        return map.transform_keys(&:to_s).transform_values(&:to_s)
+        map = map.transform_keys(&:to_s).transform_values(&:to_s)
+        append_missing_speaker_map_entries!(map, segments)
+        return map
       end
 
       labels = segments.map { |s| s["speaker"].to_s }.reject(&:empty?).uniq.sort
       map = labels.to_h { |label| [label, label] }
-      File.write(speaker_map_path, YAML.dump(map))
+      write_speaker_map!(map, segments)
       map
+    end
+
+    def append_missing_speaker_map_entries!(map, segments)
+      labels = segments.map { |s| s["speaker"].to_s }.reject(&:empty?).uniq.sort
+      missing = labels.reject { |label| map.key?(label) }
+      return if missing.empty?
+
+      File.open(speaker_map_path, "a") do |file|
+        file.puts
+        file.puts "# New speaker labels found in the raw transcript."
+        missing.each do |label|
+          speaker_map_comments(label, segments).each { |line| file.puts(line) }
+          file.puts(yaml_mapping_line(label, label))
+          file.puts
+          map[label] = label
+        end
+      end
+    end
+
+    def write_speaker_map!(map, segments)
+      lines = []
+      lines << "# Speaker samples help identify who each raw label refers to."
+      lines << "# Edit only the value after the colon, then run:"
+      lines << "#   kit listen render #{input_path}"
+      lines << ""
+
+      map.keys.sort.each do |label|
+        speaker_map_comments(label, segments).each { |line| lines << line }
+        lines << yaml_mapping_line(label, map.fetch(label))
+        lines << ""
+      end
+
+      File.write(speaker_map_path, lines.join("\n") + "\n")
+    end
+
+    def speaker_map_comments(label, segments, sample_count: 3)
+      lines = ["# #{label} samples:"]
+      samples = sample_segments(label, segments, limit: sample_count)
+      if samples.empty?
+        lines << "# - (no transcript samples found)"
+      else
+        samples.each do |segment|
+          lines << "# - [#{format_timestamp(segment['start'])}] #{comment_text(segment['text'])}"
+        end
+      end
+      lines
+    end
+
+    def sample_segments(label, segments, limit:)
+      segments.select { |segment| segment["speaker"].to_s == label }
+              .sort_by { |segment| segment["start"].to_f }
+              .first(limit)
+    end
+
+    def comment_text(text)
+      cleaned = text.to_s.gsub(/\s+/, " ").strip
+      cleaned.length > 100 ? "#{cleaned[0, 97]}..." : cleaned
+    end
+
+    def yaml_mapping_line(label, value)
+      YAML.dump(label => value).lines.reject { |line| line == "---\n" }.join.chomp
     end
 
     def normalize_segments(segments, speaker_map)

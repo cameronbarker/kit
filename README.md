@@ -8,9 +8,11 @@ It turns conversations, notes, calendar context, and work signals into commitmen
 
 ## Current Status
 
-This repository currently contains the first root-level `kit` CLI plus the first integrated `kit listen` implementation. The rest of the command surface remains a north star for the intended workflow.
+This repository currently contains the first root-level `kit` CLI, the first integrated `kit listen` implementation, a thin macOS menu bar helper, and the intended Kit Obsidian plugin surface. The rest of the command surface remains a north star for the intended workflow.
 
 The old `Listen/` prototype remains ignored as a migration archive because it contains standalone project scaffolding, local recordings/transcripts, a nested `.git`, and generated Python environment artifacts. Useful source, tests, and Python worker files have been migrated into `lib/kit/listen/` and `test/kit/listen/`.
+
+This repo intentionally does not track local usage data: `.env`, recordings, transcripts, packaged model files, build outputs, virtual environments, Obsidian workspace state, and local Obsidian playground/tooling folders are ignored.
 
 ## Usage
 
@@ -71,6 +73,12 @@ bin/kit status --json
 
 The Ruby bridge lives in `lib/kit/app_bridge/`. A native macOS menu bar scaffold lives in `mac/menubar/` and documents how a future helper should integrate with Kit core commands.
 
+## Obsidian
+
+The tracked Obsidian surface lives in `obsidian/.obsidian/plugins/kit/`. It is a local Kit plugin scaffold, not a backup of vault usage or personal notes.
+
+The vault notes, workspace layout, plugin private data, and the local `hello-world` Obsidian API playground are ignored by git.
+
 ## Listen
 
 `kit listen` is the migrated implementation from the former standalone Listen prototype. Ruby owns the CLI and artifact workflow; Python is only used by the local WhisperX/pyannote worker.
@@ -130,6 +138,6 @@ ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |path| require File.expand_
 
 No external Ruby gems are required. Automated tests do not send real notifications and use mock transcription rather than real ML.
 
-## Project Notes
+## License
 
-See [`kit-one-sheet.md`](kit-one-sheet.md) for the broader product vision, workflow, and guardrails.
+Kit is licensed under the Apache License, Version 2.0. See `LICENSE`.

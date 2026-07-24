@@ -21,4 +21,7 @@ obsidian/.obsidian/workspace-mobile.json
 obsidian/.obsidian/workspaces.json
 obsidian/.obsidian/graph.json
 obsidian/.obsidian/plugins/*/data.json
+
+# Local Obsidian API playground/tooling, not part of the public Kit source.
+obsidian/.obsidian/plugins/hello-world/
 obsidian/.trash/

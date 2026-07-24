@@ -9,6 +9,16 @@ __pycache__/
 .DS_Store
 mac/menubar/.build/
 
-# Obsidian vault notes — keep only settings
+output/
+
+# Obsidian vault: keep .obsidian settings + plugins, ignore notes
 obsidian/*
 !obsidian/.obsidian/
+
+# Local / volatile Obsidian state (layout, caches, plugin private data)
+obsidian/.obsidian/workspace.json
+obsidian/.obsidian/workspace-mobile.json
+obsidian/.obsidian/workspaces.json
+obsidian/.obsidian/graph.json
+obsidian/.obsidian/plugins/*/data.json
+obsidian/.trash/

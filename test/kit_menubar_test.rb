@@ -30,6 +30,7 @@ class KitMenuBarTest < Minitest::Test
     assert_equal ["swift", "run", "KitMenuBar"], result.command
     assert_equal Kit::MenuBar::PACKAGE_DIR, spawned[:package_dir]
     assert_equal Kit::MenuBar::KIT_CLI, spawned[:env]["KIT_CLI"]
+    assert_equal Kit::MenuBar::ICON_PATH, spawned[:env]["KIT_MENUBAR_ICON"]
     assert_equal false, spawned[:foreground]
     # Launcher forwards the process env (including .env-loaded values) to Swift.
     if ENV["KIT_LISTEN_AUDIO_DEVICE"]

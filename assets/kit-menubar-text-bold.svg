@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="24" viewBox="0 0 72 24" role="img" aria-label="Kit">
+  <title>Kit menu bar text mark bold</title>
+  <style>
+    text {
+      fill: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0;
+      dominant-baseline: middle;
+      text-anchor: middle;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      text {
+        fill: #fff;
+      }
+    }
+  </style>
+  <text x="36" y="12">Kit</text>
+</svg>

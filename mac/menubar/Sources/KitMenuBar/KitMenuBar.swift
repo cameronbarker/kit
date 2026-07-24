@@ -123,6 +123,7 @@ final class KitCLI {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let kit = KitCLI(executableURL: URL(fileURLWithPath: ProcessInfo.processInfo.environment["KIT_CLI"] ?? "/usr/local/bin/kit"))
+    private let statusIcon = AppDelegate.loadStatusIcon()
     private var lastError: String?
     private var listenStatus: ListenStatus?
     private var kitHealthOK = true
@@ -134,7 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        statusItem.button?.title = "Kit"
+        applyStatusItemAppearance()
         refreshMenu()
         startListenPollingIfNeeded()
     }
@@ -147,7 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do {
             let status = try kit.status()
             kitHealthOK = status.health.indicator == "ok"
-            statusItem.button?.title = statusBarTitle()
+            applyStatusItemAppearance()
             menu.addItem(NSMenuItem(title: status.health.message, action: nil, keyEquivalent: ""))
             menu.addItem(.separator())
 
@@ -165,7 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         } catch {
             kitHealthOK = false
-            statusItem.button?.title = "Kit!"
+            applyStatusItemAppearance()
             menu.addItem(NSMenuItem(title: error.localizedDescription, action: nil, keyEquivalent: ""))
         }
 
@@ -276,7 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } catch {
             listenStatus = nil
         }
-        statusItem.button?.title = statusBarTitle()
+        applyStatusItemAppearance()
         updateListenMenuItems()
         startListenPollingIfNeeded()
     }
@@ -302,7 +303,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.async {
                 self.listenStatus = status
                 self.listenPulse.toggle()
-                self.statusItem.button?.title = self.statusBarTitle()
+                self.applyStatusItemAppearance()
                 self.updateListenMenuItems()
                 if status?.isActive != true {
                     self.startListenPollingIfNeeded()
@@ -317,6 +318,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updateListenMenuItems() {
         listenStatusMenuItem?.title = listenPrimaryLine()
         listenDetailMenuItem?.title = listenDetailLine()
+    }
+
+    private func applyStatusItemAppearance() {
+        guard let button = statusItem.button else { return }
+
+        if shouldShowStatusIcon, let statusIcon {
+            statusItem.length = NSStatusItem.squareLength
+            button.title = ""
+            button.image = statusIcon
+            button.imagePosition = .imageOnly
+            button.toolTip = "Kit"
+        } else {
+            statusItem.length = NSStatusItem.variableLength
+            button.image = nil
+            button.imagePosition = .noImage
+            button.title = statusBarTitle()
+            button.toolTip = nil
+        }
+    }
+
+    private var shouldShowStatusIcon: Bool {
+        guard let listen = listenStatus else {
+            return kitHealthOK
+        }
+        return kitHealthOK && !listen.isActive && listen.phase != "error"
+    }
+
+    private static func loadStatusIcon() -> NSImage? {
+        let iconPath = ProcessInfo.processInfo.environment["KIT_MENUBAR_ICON"] ?? "../../assets/Kit-Logo-2424r.png"
+        guard let image = NSImage(contentsOfFile: iconPath) else {
+            return nil
+        }
+
+        image.isTemplate = true
+        image.size = NSSize(width: 18, height: 18)
+        return image
     }
 
     private func statusBarTitle() -> String {

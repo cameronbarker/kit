@@ -9,6 +9,7 @@ module Kit
     PACKAGE_DIR = File.join(ROOT, "mac", "menubar")
     EXECUTABLE_NAME = "KitMenuBar"
     KIT_CLI = File.join(ROOT, "bin", "kit")
+    ICON_PATH = File.join(ROOT, "assets", "Kit-Logo-2424r.png")
 
     LaunchResult = Struct.new(
       :success?,
@@ -45,7 +46,10 @@ module Kit
         command = [@swift, "run", EXECUTABLE_NAME]
         return dry_run_result(command, foreground) if @dry_run
 
-        env = ENV.to_h.merge("KIT_CLI" => @kit_cli)
+        env = ENV.to_h.merge(
+          "KIT_CLI" => @kit_cli,
+          "KIT_MENUBAR_ICON" => ICON_PATH
+        )
         pid = @spawner.call(env, command, @package_dir, foreground)
         LaunchResult.new(
           success?: true,

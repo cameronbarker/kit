@@ -8,7 +8,7 @@
 #   pip install -r python/requirements.txt
 #
 # You also need ffmpeg on PATH.
-# Accept pyannote model terms on Hugging Face and export HF_TOKEN.
+# Real transcription expects packaged model files under repo-local model/.
 #
 # Pins keep torch / numpy / transformers compatible. Unpinned installs often
 # pull NumPy 2.x + transformers 5.x, which break torch 2.2 / WhisperX 3.3.

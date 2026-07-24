@@ -1,6 +1,7 @@
 /Listen/
 recordings/
 transcripts/
+model/
 .cache/
 .venv/
 __pycache__/

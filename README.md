@@ -90,6 +90,14 @@ transcripts/
   json/<slug>.json
   md/<slug>.md
   maps/<slug>.speaker-map.yml
+
+model/
+  config.json
+  model.bin
+  tokenizer.json
+  vocabulary.txt
+  wav2vec2_fairseq_base_ls960_asr_ls960.pth
+  speaker-diarization.yml
 ```
 
 Common commands:
@@ -110,7 +118,7 @@ bin/kit listen render path/to/meeting.m4a
 
 For recording, pass `--device` or set `KIT_LISTEN_AUDIO_DEVICE`. The legacy `LEADERSHIP_TRANSCRIPTS_AUDIO_DEVICE` env var is still accepted during migration.
 
-Mock transcription requires no Python ML install. Real local transcription requires Python 3.11 or 3.12 dependencies from `lib/kit/listen/python/requirements.txt`, ffmpeg on `PATH`, accepted pyannote model terms, and `HF_TOKEN` when warming or using gated diarization models.
+Mock transcription requires no Python ML install. Real local transcription requires Python 3.11 or 3.12 dependencies from `lib/kit/listen/python/requirements.txt`, ffmpeg on `PATH`, and packaged model files in ignored repo-local `model/` storage. Runtime transcription is offline-only and never downloads models.
 
 ## Development
 

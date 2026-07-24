@@ -77,6 +77,32 @@ class KitListenTest < Minitest::Test
     assert_equal "idle", payload["phase"]
     assert_nil payload["recorder_pid"]
   end
+
+  def test_real_worker_requires_flat_packaged_model_files
+    input = File.join(@tmpdir, "meeting.m4a")
+    output = File.join(@tmpdir, "raw.json")
+    model_dir = File.join(@tmpdir, "model")
+    FileUtils.mkdir_p(model_dir)
+    File.write(input, "fake-audio")
+
+    stdout, stderr, status = Open3.capture3(
+      { "KIT_LISTEN_MODEL_DIR" => model_dir },
+      "python3",
+      Kit::Listen::PYTHON_WORKER,
+      "--input",
+      input,
+      "--output",
+      output
+    )
+
+    assert_equal 1, status.exitstatus
+    assert_empty stdout
+    assert_includes stderr, "Packaged Listen model files are missing"
+    assert_includes stderr, File.join(model_dir, "config.json")
+    assert_includes stderr, File.join(model_dir, "model.bin")
+    assert_includes stderr, File.join(model_dir, "wav2vec2_fairseq_base_ls960_asr_ls960.pth")
+    assert_includes stderr, File.join(model_dir, "speaker-diarization.yml")
+  end
 end
 
 Dir[File.expand_path("kit/listen/**/*_test.rb", __dir__)].sort.each do |path|

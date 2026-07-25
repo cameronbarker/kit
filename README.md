@@ -79,6 +79,16 @@ The tracked Obsidian surface lives in `obsidian/.obsidian/plugins/kit/`. It is a
 
 The vault notes, workspace layout, plugin private data, and the local `hello-world` Obsidian API playground are ignored by git.
 
+To develop the plugin (TypeScript → `main.js`):
+
+```bash
+cd obsidian/.obsidian/plugins/kit
+npm install
+npm run dev
+```
+
+Use `npm run build` for a production bundle. Reload Obsidian (or disable/enable the plugin) after rebuilds.
+
 ## Listen
 
 `kit listen` is the migrated implementation from the former standalone Listen prototype. Ruby owns the CLI and artifact workflow; Python is only used by the local WhisperX/pyannote worker.

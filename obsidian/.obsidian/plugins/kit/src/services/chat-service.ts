@@ -16,7 +16,10 @@ export function createChatMessage(
   role: ChatMessage["role"],
   content: string,
   extras?: Partial<
-    Pick<ChatMessage, "kind" | "statusLine" | "mode" | "startedAt" | "durationMs">
+    Pick<
+      ChatMessage,
+      "kind" | "statusLine" | "mode" | "startedAt" | "durationMs" | "mentions"
+    >
   >,
 ): ChatMessage {
   messageSeq += 1;
@@ -37,9 +40,22 @@ function formatActiveTab(context: ActiveTabContext | null): string {
   return `Active tab: ${context.title} (${context.viewType})`;
 }
 
-function formatMentions(documents: ChatDocumentRef[]): string {
+function formatMentions(
+  documents: ChatDocumentRef[],
+  vaultPath: string,
+): string {
   if (documents.length === 0) return "Mentions: none";
-  return `Mentions: ${documents.map((doc) => doc.path).join(", ")}`;
+
+  const lines = documents.map((doc) => {
+    const absolute = `${vaultPath.replace(/\/$/, "")}/${doc.path}`;
+    return `- ${doc.path} (absolute: ${absolute})`;
+  });
+
+  return [
+    "Attached vault paths (@ mentions).",
+    "Working directory is the vault root. Read these files/folders yourself with your tools as needed — do not guess their contents:",
+    ...lines,
+  ].join("\n");
 }
 
 const APPLY_PROMPT =
@@ -131,7 +147,7 @@ function buildPrompt(input: ChatTurnInput): string {
     modeInstructions(input.mode),
     input.threadContext ? formatThreadContext(input.threadContext) : "",
     formatActiveTab(input.activeTab),
-    formatMentions(input.mentions),
+    formatMentions(input.mentions, input.vaultPath),
     recent
       ? `${input.threadContext ? "Thread" : "Recent"} chat:\n${recent}`
       : "",

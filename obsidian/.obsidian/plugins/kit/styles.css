@@ -353,10 +353,30 @@
   height: 14px;
 }
 
+.kit-chat__message-mentions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.25rem;
+}
+
+.kit-chat__message-mention {
+  display: inline-flex;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-s, 4px);
+  background: var(--background-modifier-hover);
+}
+
 .kit-chat__message-editor {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.kit-chat__message-edit-mentions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .kit-chat__message-edit-input {

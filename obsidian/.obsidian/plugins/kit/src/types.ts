@@ -31,6 +31,8 @@ export interface ChatMessage {
   startedAt?: number;
   /** Total run duration in milliseconds once finished. */
   durationMs?: number;
+  /** Vault files attached via @ when this user message was sent. */
+  mentions?: ChatDocumentRef[];
 }
 
 /** Side thread rooted at a main-lane parent message. */

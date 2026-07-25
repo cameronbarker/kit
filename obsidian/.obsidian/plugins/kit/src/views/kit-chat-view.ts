@@ -47,6 +47,8 @@ export class KitChatView extends ItemView {
   private elapsedTimer: number | null = null;
   /** User message currently open for in-place edit. */
   private editingMessageId: string | null = null;
+  /** Draft @ attachments while editing a user message. */
+  private editingMentions: ChatDocumentRef[] = [];
 
   constructor(leaf: WorkspaceLeaf, plugin: KitPlugin) {
     super(leaf);
@@ -196,6 +198,7 @@ export class KitChatView extends ItemView {
     if (!parent || parent.kind === "streaming") return;
 
     this.editingMessageId = null;
+    this.editingMentions = [];
     this.ensureThread(parentMessageId);
     this.activeThreadParentId = parentMessageId;
     this.updateThreadChrome();
@@ -207,6 +210,7 @@ export class KitChatView extends ItemView {
   private closeThread(): void {
     if (this.sending) return;
     this.editingMessageId = null;
+    this.editingMentions = [];
     this.activeThreadParentId = null;
     this.updateThreadChrome();
     this.renderMessages();
@@ -718,6 +722,19 @@ export class KitChatView extends ItemView {
     if (message.role === "user" && this.editingMessageId === message.id) {
       this.renderUserMessageEditor(bubble, message);
     } else {
+      if (message.role === "user") {
+        const mentions = message.mentions ?? [];
+        if (mentions.length > 0) {
+          const chips = bubble.createDiv({ cls: "kit-chat__message-mentions" });
+          for (const doc of mentions) {
+            chips.createEl("span", {
+              text: `@${doc.basename}`,
+              cls: "kit-chat__chip-label kit-chat__message-mention",
+              attr: { title: doc.path },
+            });
+          }
+        }
+      }
       bubble.createEl("p", {
         text: message.content || (message.kind === "streaming" ? "…" : ""),
         cls: "kit-chat__content",
@@ -770,6 +787,34 @@ export class KitChatView extends ItemView {
     message: ChatMessage,
   ): void {
     const editor = bubble.createDiv({ cls: "kit-chat__message-editor" });
+
+    if (this.editingMentions.length > 0) {
+      const chips = editor.createDiv({ cls: "kit-chat__message-edit-mentions" });
+      for (const doc of this.editingMentions) {
+        const chip = chips.createDiv({ cls: "kit-chat__chip" });
+        chip.createEl("span", {
+          text: `@${doc.basename}`,
+          cls: "kit-chat__chip-label",
+          attr: { title: doc.path },
+        });
+        const removeBtn = chip.createEl("button", {
+          text: "×",
+          cls: "kit-chat__chip-remove",
+          attr: {
+            type: "button",
+            title: `Remove ${doc.path}`,
+            "aria-label": `Remove ${doc.path}`,
+          },
+        });
+        this.registerDomEvent(removeBtn, "click", () => {
+          this.editingMentions = this.editingMentions.filter(
+            (m) => m.path !== doc.path,
+          );
+          this.renderMessages();
+        });
+      }
+    }
+
     const textarea = editor.createEl("textarea", {
       cls: "kit-chat__message-edit-input",
       attr: { rows: "4", "aria-label": "Edit message" },
@@ -795,6 +840,7 @@ export class KitChatView extends ItemView {
 
     this.registerDomEvent(cancelBtn, "click", () => {
       this.editingMessageId = null;
+      this.editingMentions = [];
       this.renderMessages();
     });
 
@@ -806,6 +852,7 @@ export class KitChatView extends ItemView {
       if (event.key === "Escape") {
         event.preventDefault();
         this.editingMessageId = null;
+        this.editingMentions = [];
         this.renderMessages();
         return;
       }
@@ -816,10 +863,50 @@ export class KitChatView extends ItemView {
     });
   }
 
+  /**
+   * Split legacy "@path @path\\nbody" content into mentions + body when
+   * mentions were not stored on the message yet.
+   */
+  private mentionsAndBodyFromMessage(message: ChatMessage): {
+    mentions: ChatDocumentRef[];
+    body: string;
+  } {
+    if (message.mentions && message.mentions.length > 0) {
+      return { mentions: [...message.mentions], body: message.content };
+    }
+
+    const lines = message.content.split("\n");
+    const first = lines[0] ?? "";
+    if (!first.includes("@")) {
+      return { mentions: [], body: message.content };
+    }
+
+    const tokens = first.trim().split(/\s+/);
+    if (tokens.length === 0 || !tokens.every((t) => t.startsWith("@"))) {
+      return { mentions: [], body: message.content };
+    }
+
+    const mentions: ChatDocumentRef[] = tokens.map((token) => {
+      const path = token.slice(1);
+      const basename = path.includes("/")
+        ? (path.split("/").pop() ?? path)
+        : path;
+      return { path, basename: basename.replace(/\.md$/i, "") };
+    });
+
+    const body = lines.slice(1).join("\n").replace(/^\n/, "");
+    return { mentions, body };
+  }
+
   private beginEditMessage(messageId: string): void {
     if (this.sending) return;
     const message = this.activeMessages().find((m) => m.id === messageId);
     if (!message || message.role !== "user") return;
+
+    const parsed = this.mentionsAndBodyFromMessage(message);
+    message.content = parsed.body;
+    message.mentions = parsed.mentions;
+    this.editingMentions = [...parsed.mentions];
     this.editingMessageId = messageId;
     this.renderMessages();
   }
@@ -847,9 +934,12 @@ export class KitChatView extends ItemView {
       );
     }
 
+    const mentions = [...this.editingMentions];
     this.replaceActiveMessages(messages.slice(0, index + 1));
     userMessage.content = text;
+    userMessage.mentions = mentions;
     this.editingMessageId = null;
+    this.editingMentions = [];
     this.setActiveCodexThreadId(null);
 
     const mode = userMessage.mode ?? this.mode;
@@ -860,7 +950,7 @@ export class KitChatView extends ItemView {
       mode,
       userText: text,
       userMessage,
-      mentions: [],
+      mentions,
     });
   }
 
@@ -970,21 +1060,17 @@ export class KitChatView extends ItemView {
     if (!text) return;
 
     this.editingMessageId = null;
+    this.editingMentions = [];
     this.inputEl.value = "";
 
-    const mentionPrefix =
-      this.mentions.length > 0
-        ? `${this.mentions.map((doc) => `@${doc.path}`).join(" ")}\n`
-        : "";
-    const userMessage = createChatMessage(
-      "user",
-      `${mentionPrefix}${text}`,
-      { mode: this.mode },
-    );
+    const mentions = [...this.mentions];
+    const userMessage = createChatMessage("user", text, {
+      mode: this.mode,
+      mentions,
+    });
     this.activeMessages().push(userMessage);
     this.touchActiveThread();
 
-    const mentions = [...this.mentions];
     await this.runAssistantTurn({
       mode: this.mode,
       userText: text,

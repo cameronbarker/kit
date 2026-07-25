@@ -38,6 +38,8 @@ export class KitChatView extends ItemView {
   private codexReady: boolean | null = null;
   private codexStatusEl: HTMLElement | null = null;
   private elapsedTimer: number | null = null;
+  /** User message currently open for in-place edit. */
+  private editingMessageId: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: KitPlugin) {
     super(leaf);
@@ -428,6 +430,25 @@ export class KitChatView extends ItemView {
       });
     }
 
+    if (
+      message.role === "user" &&
+      !this.sending &&
+      this.editingMessageId !== message.id
+    ) {
+      const editBtn = header.createEl("button", {
+        cls: "kit-chat__edit",
+        attr: {
+          type: "button",
+          title: "Edit and resend from here",
+          "aria-label": "Edit and resend from here",
+        },
+      });
+      setIcon(editBtn, "pencil");
+      this.registerDomEvent(editBtn, "click", () => {
+        this.beginEditMessage(message.id);
+      });
+    }
+
     const copyBtn = header.createEl("button", {
       cls: "kit-chat__copy",
       attr: {
@@ -448,10 +469,14 @@ export class KitChatView extends ItemView {
       });
     }
 
-    bubble.createEl("p", {
-      text: message.content || (message.kind === "streaming" ? "…" : ""),
-      cls: "kit-chat__content",
-    });
+    if (message.role === "user" && this.editingMessageId === message.id) {
+      this.renderUserMessageEditor(bubble, message);
+    } else {
+      bubble.createEl("p", {
+        text: message.content || (message.kind === "streaming" ? "…" : ""),
+        cls: "kit-chat__content",
+      });
+    }
 
     if (
       message.kind === "proposal" &&
@@ -472,6 +497,99 @@ export class KitChatView extends ItemView {
         void this.handleApply(message.id);
       });
     }
+  }
+
+  private renderUserMessageEditor(
+    bubble: HTMLElement,
+    message: ChatMessage,
+  ): void {
+    const editor = bubble.createDiv({ cls: "kit-chat__message-editor" });
+    const textarea = editor.createEl("textarea", {
+      cls: "kit-chat__message-edit-input",
+      attr: { rows: "4", "aria-label": "Edit message" },
+    });
+    textarea.value = message.content;
+
+    const actions = editor.createDiv({ cls: "kit-chat__message-edit-actions" });
+    const cancelBtn = actions.createEl("button", {
+      text: "Cancel",
+      cls: "kit-chat__message-edit-cancel",
+      attr: { type: "button" },
+    });
+    const resendBtn = actions.createEl("button", {
+      text: "Save & resend",
+      cls: "mod-cta kit-chat__message-edit-resend",
+      attr: { type: "button" },
+    });
+
+    window.setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    }, 0);
+
+    this.registerDomEvent(cancelBtn, "click", () => {
+      this.editingMessageId = null;
+      this.renderMessages();
+    });
+
+    this.registerDomEvent(resendBtn, "click", () => {
+      void this.resendFromEditedMessage(message.id, textarea.value);
+    });
+
+    this.registerDomEvent(textarea, "keydown", (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.editingMessageId = null;
+        this.renderMessages();
+        return;
+      }
+      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        void this.resendFromEditedMessage(message.id, textarea.value);
+      }
+    });
+  }
+
+  private beginEditMessage(messageId: string): void {
+    if (this.sending) return;
+    const message = this.messages.find((m) => m.id === messageId);
+    if (!message || message.role !== "user") return;
+    this.editingMessageId = messageId;
+    this.renderMessages();
+  }
+
+  private async resendFromEditedMessage(
+    messageId: string,
+    rawText: string,
+  ): Promise<void> {
+    const text = rawText.trim();
+    if (!text) {
+      new Notice("Message can’t be empty.");
+      return;
+    }
+
+    const index = this.messages.findIndex((m) => m.id === messageId);
+    if (index < 0) return;
+
+    const userMessage = this.messages[index];
+    if (!userMessage || userMessage.role !== "user") return;
+
+    // Truncate everything after this message and restart Codex from here.
+    this.messages = this.messages.slice(0, index + 1);
+    userMessage.content = text;
+    this.editingMessageId = null;
+    this.threadId = null;
+
+    const mode = userMessage.mode ?? this.mode;
+    this.mode = mode;
+    this.syncModeButtons();
+
+    await this.runAssistantTurn({
+      mode,
+      userText: text,
+      userMessage,
+      mentions: [],
+    });
   }
 
   private applyStreamEvent(
@@ -579,9 +697,7 @@ export class KitChatView extends ItemView {
     const text = this.inputEl.value.trim();
     if (!text) return;
 
-    this.sending = true;
-    this.abortController = new AbortController();
-    this.updateActionButtons();
+    this.editingMessageId = null;
     this.inputEl.value = "";
 
     const mentionPrefix =
@@ -595,11 +711,44 @@ export class KitChatView extends ItemView {
     );
     this.messages.push(userMessage);
 
+    const mentions = [...this.mentions];
+    await this.runAssistantTurn({
+      mode: this.mode,
+      userText: text,
+      userMessage,
+      mentions,
+      vaultPath,
+    });
+  }
+
+  private async runAssistantTurn(options: {
+    mode: ChatMode;
+    userText: string;
+    userMessage: ChatMessage;
+    mentions: ChatDocumentRef[];
+    vaultPath?: string;
+  }): Promise<void> {
+    if (this.sending) return;
+    if (this.codexReady !== true) {
+      new Notice("Codex CLI is not available. Check Kit settings.");
+      return;
+    }
+
+    const vaultPath = options.vaultPath ?? this.vaultPath();
+    if (!vaultPath) {
+      new Notice("Could not resolve vault path.");
+      return;
+    }
+
+    this.sending = true;
+    this.abortController = new AbortController();
+    this.updateActionButtons();
+
     const startedAt = Date.now();
     const streaming = createChatMessage("assistant", "", {
       kind: "streaming",
       statusLine: "Starting Codex…",
-      mode: this.mode,
+      mode: options.mode,
       startedAt,
     });
     this.messages.push(streaming);
@@ -607,17 +756,17 @@ export class KitChatView extends ItemView {
     this.startElapsedTimer();
 
     const activeTab = this.plugin.activeTabService.getContext();
-    const mentions = [...this.mentions];
 
     try {
       const result = await this.plugin.chatService.startTurn({
-        mode: this.mode,
-        userText: text,
+        mode: options.mode,
+        userText: options.userText,
         history: this.messages.filter(
-          (m) => m.id !== streaming.id && m.id !== userMessage.id,
+          (m) =>
+            m.id !== streaming.id && m.id !== options.userMessage.id,
         ),
         activeTab,
-        mentions,
+        mentions: options.mentions,
         threadId: this.threadId,
         vaultPath,
         binary: this.plugin.settings.codexBinary,

@@ -33,6 +33,16 @@ export interface ChatMessage {
   durationMs?: number;
 }
 
+/** Side thread rooted at a main-lane parent message. */
+export interface ChatThread {
+  id: string;
+  parentMessageId: string;
+  messages: ChatMessage[];
+  codexThreadId: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** Snapshot of the main-area tab (not the sidebar). */
 export interface ActiveTabContext {
   viewType: string;

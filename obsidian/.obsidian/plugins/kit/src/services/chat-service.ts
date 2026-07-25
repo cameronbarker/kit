@@ -45,6 +45,12 @@ function formatMentions(documents: ChatDocumentRef[]): string {
 const APPLY_PROMPT =
   "Apply the plan you proposed. Make the vault edits now. Do not expand scope.";
 
+export interface ChatThreadContext {
+  parent: ChatMessage;
+  /** Up to two main-lane messages before the parent, for orientation. */
+  mainExcerpt?: ChatMessage[];
+}
+
 export interface ChatTurnInput {
   mode: ChatMode;
   userText: string;
@@ -56,6 +62,7 @@ export interface ChatTurnInput {
   binary: string;
   signal?: AbortSignal;
   onEvent: (event: CodexStreamEvent) => void;
+  threadContext?: ChatThreadContext;
 }
 
 export interface ChatTurnResult {
@@ -90,20 +97,44 @@ function modeInstructions(mode: ChatMode): string {
   ].join("\n");
 }
 
+function formatRole(message: ChatMessage): string {
+  return message.role === "user" ? "User" : "Kit";
+}
+
+function formatThreadContext(ctx: ChatThreadContext): string {
+  const lines = [
+    "You are in a side thread off the main Kit chat.",
+    "Focus on the thread topic rooted at the parent message below.",
+    `Parent (${formatRole(ctx.parent)}):\n${ctx.parent.content}`,
+  ];
+
+  if (ctx.mainExcerpt && ctx.mainExcerpt.length > 0) {
+    const excerpt = ctx.mainExcerpt
+      .map((m) => `${formatRole(m)}: ${m.content}`)
+      .join("\n\n");
+    lines.push(`Main chat excerpt (before parent):\n${excerpt}`);
+  }
+
+  return lines.join("\n\n");
+}
+
 function buildPrompt(input: ChatTurnInput): string {
   const recent = input.history
     .filter((m) => m.role === "user" || m.role === "assistant")
     .slice(-8)
-    .map((m) => `${m.role === "user" ? "User" : "Kit"}: ${m.content}`)
+    .map((m) => `${formatRole(m)}: ${m.content}`)
     .join("\n\n");
 
   return [
     "You are Kit's vault assistant, running inside an Obsidian vault.",
     `Working directory is the vault root: ${input.vaultPath}`,
     modeInstructions(input.mode),
+    input.threadContext ? formatThreadContext(input.threadContext) : "",
     formatActiveTab(input.activeTab),
     formatMentions(input.mentions),
-    recent ? `Recent chat:\n${recent}` : "",
+    recent
+      ? `${input.threadContext ? "Thread" : "Recent"} chat:\n${recent}`
+      : "",
     `User request:\n${input.userText}`,
   ]
     .filter(Boolean)

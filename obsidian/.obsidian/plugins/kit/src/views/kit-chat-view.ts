@@ -15,18 +15,25 @@ import type {
   ChatDocumentRef,
   ChatMessage,
   ChatMode,
+  ChatThread,
 } from "../types";
 import { DocumentMentionModal } from "../ui/document-mention-modal";
 
+let threadSeq = 0;
+
 export class KitChatView extends ItemView {
   plugin: KitPlugin;
-  private messages: ChatMessage[] = [];
+  private mainMessages: ChatMessage[] = [];
+  private mainCodexThreadId: string | null = null;
+  private threads = new Map<string, ChatThread>();
+  private activeThreadParentId: string | null = null;
   private mentions: ChatDocumentRef[] = [];
   private mode: ChatMode = "ask";
-  private threadId: string | null = null;
   private listEl: HTMLElement | null = null;
   private contextEl: HTMLElement | null = null;
   private mentionsEl: HTMLElement | null = null;
+  private subtitleEl: HTMLElement | null = null;
+  private threadChromeEl: HTMLElement | null = null;
   private inputEl: HTMLTextAreaElement | null = null;
   private modeAskBtn: HTMLButtonElement | null = null;
   private modeEditBtn: HTMLButtonElement | null = null;
@@ -45,7 +52,7 @@ export class KitChatView extends ItemView {
     super(leaf);
     this.plugin = plugin;
     this.mode = plugin.settings.defaultChatMode;
-    this.messages = [
+    this.mainMessages = [
       createChatMessage(
         "assistant",
         "Hi — this is Kit chat. Choose Ask or Edit, type @ to attach a vault document.",
@@ -88,12 +95,122 @@ export class KitChatView extends ItemView {
     this.listEl = null;
     this.contextEl = null;
     this.mentionsEl = null;
+    this.subtitleEl = null;
+    this.threadChromeEl = null;
     this.inputEl = null;
     this.modeAskBtn = null;
     this.modeEditBtn = null;
     this.sendBtn = null;
     this.cancelBtn = null;
     this.codexStatusEl = null;
+  }
+
+  private inThread(): boolean {
+    return this.activeThreadParentId !== null;
+  }
+
+  private activeMessages(): ChatMessage[] {
+    if (!this.activeThreadParentId) return this.mainMessages;
+    const thread = this.threads.get(this.activeThreadParentId);
+    return thread?.messages ?? this.mainMessages;
+  }
+
+  private getActiveCodexThreadId(): string | null {
+    if (!this.activeThreadParentId) return this.mainCodexThreadId;
+    return this.threads.get(this.activeThreadParentId)?.codexThreadId ?? null;
+  }
+
+  private setActiveCodexThreadId(id: string | null): void {
+    if (!this.activeThreadParentId) {
+      this.mainCodexThreadId = id;
+      return;
+    }
+    const thread = this.threads.get(this.activeThreadParentId);
+    if (thread) {
+      thread.codexThreadId = id;
+      thread.updatedAt = Date.now();
+    }
+  }
+
+  private replaceActiveMessages(messages: ChatMessage[]): void {
+    if (!this.activeThreadParentId) {
+      this.mainMessages = messages;
+      return;
+    }
+    const thread = this.threads.get(this.activeThreadParentId);
+    if (thread) {
+      thread.messages = messages;
+      thread.updatedAt = Date.now();
+    }
+  }
+
+  private touchActiveThread(): void {
+    if (!this.activeThreadParentId) return;
+    const thread = this.threads.get(this.activeThreadParentId);
+    if (thread) thread.updatedAt = Date.now();
+  }
+
+  private ensureThread(parentMessageId: string): ChatThread {
+    const existing = this.threads.get(parentMessageId);
+    if (existing) return existing;
+
+    threadSeq += 1;
+    const now = Date.now();
+    const thread: ChatThread = {
+      id: `thread-${now}-${threadSeq}`,
+      parentMessageId,
+      messages: [],
+      codexThreadId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.threads.set(parentMessageId, thread);
+    return thread;
+  }
+
+  private parentMessage(): ChatMessage | null {
+    if (!this.activeThreadParentId) return null;
+    return (
+      this.mainMessages.find((m) => m.id === this.activeThreadParentId) ?? null
+    );
+  }
+
+  private mainExcerptBefore(parentId: string): ChatMessage[] {
+    const index = this.mainMessages.findIndex((m) => m.id === parentId);
+    if (index <= 0) return [];
+    return this.mainMessages.slice(Math.max(0, index - 2), index);
+  }
+
+  private buildThreadContext() {
+    const parent = this.parentMessage();
+    if (!parent || !this.activeThreadParentId) return undefined;
+    return {
+      parent,
+      mainExcerpt: this.mainExcerptBefore(parent.id),
+    };
+  }
+
+  private openThread(parentMessageId: string): void {
+    if (this.sending) return;
+    const parent = this.mainMessages.find((m) => m.id === parentMessageId);
+    if (!parent || parent.kind === "streaming") return;
+
+    this.editingMessageId = null;
+    this.ensureThread(parentMessageId);
+    this.activeThreadParentId = parentMessageId;
+    this.updateThreadChrome();
+    this.renderMessages();
+    this.updateActionButtons();
+    this.inputEl?.focus();
+  }
+
+  private closeThread(): void {
+    if (this.sending) return;
+    this.editingMessageId = null;
+    this.activeThreadParentId = null;
+    this.updateThreadChrome();
+    this.renderMessages();
+    this.updateActionButtons();
   }
 
   private vaultPath(): string | null {
@@ -148,10 +265,12 @@ export class KitChatView extends ItemView {
     }
 
     root.createEl("h2", { text: "Kit chat", cls: "kit-chat__title" });
-    root.createEl("p", {
-      text: "Ask answers read-only. Edit plans changes — Apply writes them.",
+    this.subtitleEl = root.createEl("p", {
       cls: "kit-chat__subtitle",
     });
+
+    this.threadChromeEl = root.createDiv({ cls: "kit-chat__thread-chrome" });
+    this.updateThreadChrome();
 
     this.codexStatusEl = root.createDiv({ cls: "kit-chat__codex-status" });
     this.updateCodexStatusLabel("Checking Codex…");
@@ -170,7 +289,9 @@ export class KitChatView extends ItemView {
       cls: "kit-chat__input",
       attr: {
         rows: "3",
-        placeholder: "Message Kit… (@ to attach a doc)",
+        placeholder: this.inThread()
+          ? "Reply in thread… (@ to attach a doc)"
+          : "Message Kit… (@ to attach a doc)",
       },
     });
 
@@ -250,6 +371,65 @@ export class KitChatView extends ItemView {
     this.updateActionButtons();
   }
 
+  private updateThreadChrome(): void {
+    if (this.subtitleEl) {
+      this.subtitleEl.setText(
+        this.inThread()
+          ? "Thread — Ask / Edit stay scoped to this fork."
+          : "Ask answers read-only. Edit plans changes — Apply writes them.",
+      );
+    }
+
+    if (!this.threadChromeEl) return;
+    this.threadChromeEl.empty();
+
+    if (!this.inThread()) {
+      this.threadChromeEl.addClass("kit-chat__thread-chrome--empty");
+      return;
+    }
+
+    this.threadChromeEl.removeClass("kit-chat__thread-chrome--empty");
+    const parent = this.parentMessage();
+
+    const bar = this.threadChromeEl.createDiv({ cls: "kit-chat__thread-bar" });
+    const backBtn = bar.createEl("button", {
+      text: "Back",
+      cls: "kit-chat__thread-back",
+      attr: {
+        type: "button",
+        title: "Back to main chat",
+        "aria-label": "Back to main chat",
+      },
+    });
+    backBtn.disabled = this.sending;
+    this.registerDomEvent(backBtn, "click", () => {
+      this.closeThread();
+    });
+
+    bar.createEl("span", {
+      text: "Thread",
+      cls: "kit-chat__thread-label",
+    });
+
+    if (parent) {
+      const preview =
+        parent.content.length > 120
+          ? `${parent.content.slice(0, 117)}…`
+          : parent.content;
+      this.threadChromeEl.createEl("p", {
+        text: preview || "(empty message)",
+        cls: "kit-chat__thread-parent-preview",
+        attr: { title: parent.content },
+      });
+    }
+
+    if (this.inputEl) {
+      this.inputEl.placeholder = this.inThread()
+        ? "Reply in thread… (@ to attach a doc)"
+        : "Message Kit… (@ to attach a doc)";
+    }
+  }
+
   private setMode(mode: ChatMode): void {
     if (this.sending) return;
     this.mode = mode;
@@ -282,12 +462,13 @@ export class KitChatView extends ItemView {
     if (this.modeAskBtn) this.modeAskBtn.disabled = this.sending;
     if (this.modeEditBtn) this.modeEditBtn.disabled = this.sending;
     if (this.inputEl) this.inputEl.disabled = this.sending;
+    this.updateThreadChrome();
   }
 
   private handleStop(): void {
     if (!this.sending || !this.abortController) return;
 
-    const streaming = [...this.messages]
+    const streaming = [...this.activeMessages()]
       .reverse()
       .find((m) => m.kind === "streaming");
     if (streaming) {
@@ -362,7 +543,24 @@ export class KitChatView extends ItemView {
     if (!this.listEl) return;
     this.listEl.empty();
 
-    for (const message of this.messages) {
+    if (this.inThread()) {
+      const parent = this.parentMessage();
+      if (parent) {
+        const quote = this.listEl.createDiv({
+          cls: "kit-chat__parent-quote",
+        });
+        quote.createEl("span", {
+          text: "Parent",
+          cls: "kit-chat__parent-quote-label",
+        });
+        quote.createEl("p", {
+          text: parent.content || "(empty message)",
+          cls: "kit-chat__parent-quote-text",
+        });
+      }
+    }
+
+    for (const message of this.activeMessages()) {
       this.renderMessageBubble(message);
     }
 
@@ -417,6 +615,15 @@ export class KitChatView extends ItemView {
     }
   }
 
+  private canReplyTo(message: ChatMessage): boolean {
+    return (
+      !this.inThread() &&
+      !this.sending &&
+      message.kind !== "streaming" &&
+      (message.role === "user" || message.role === "assistant")
+    );
+  }
+
   private renderMessageBubble(message: ChatMessage): void {
     if (!this.listEl) return;
 
@@ -451,6 +658,21 @@ export class KitChatView extends ItemView {
               ? "Elapsed time"
               : "Time to complete",
         },
+      });
+    }
+
+    if (this.canReplyTo(message)) {
+      const replyBtn = header.createEl("button", {
+        cls: "kit-chat__reply",
+        attr: {
+          type: "button",
+          title: "Reply in thread",
+          "aria-label": "Reply in thread",
+        },
+      });
+      setIcon(replyBtn, "message-square");
+      this.registerDomEvent(replyBtn, "click", () => {
+        this.openThread(message.id);
       });
     }
 
@@ -500,6 +722,26 @@ export class KitChatView extends ItemView {
         text: message.content || (message.kind === "streaming" ? "…" : ""),
         cls: "kit-chat__content",
       });
+    }
+
+    if (!this.inThread()) {
+      const thread = this.threads.get(message.id);
+      const replyCount = thread?.messages.length ?? 0;
+      if (replyCount > 0) {
+        const chip = bubble.createEl("button", {
+          text: replyCount === 1 ? "1 reply" : `${replyCount} replies`,
+          cls: "kit-chat__reply-chip",
+          attr: {
+            type: "button",
+            title: "Open thread",
+            "aria-label": "Open thread",
+          },
+        });
+        chip.disabled = this.sending;
+        this.registerDomEvent(chip, "click", () => {
+          this.openThread(message.id);
+        });
+      }
     }
 
     if (
@@ -576,7 +818,7 @@ export class KitChatView extends ItemView {
 
   private beginEditMessage(messageId: string): void {
     if (this.sending) return;
-    const message = this.messages.find((m) => m.id === messageId);
+    const message = this.activeMessages().find((m) => m.id === messageId);
     if (!message || message.role !== "user") return;
     this.editingMessageId = messageId;
     this.renderMessages();
@@ -592,17 +834,23 @@ export class KitChatView extends ItemView {
       return;
     }
 
-    const index = this.messages.findIndex((m) => m.id === messageId);
+    const messages = this.activeMessages();
+    const index = messages.findIndex((m) => m.id === messageId);
     if (index < 0) return;
 
-    const userMessage = this.messages[index];
+    const userMessage = messages[index];
     if (!userMessage || userMessage.role !== "user") return;
 
-    // Truncate everything after this message and restart Codex from here.
-    this.messages = this.messages.slice(0, index + 1);
+    if (!this.inThread() && this.threads.has(messageId)) {
+      new Notice(
+        "This message has a thread — replies were kept, but the thread may be stale.",
+      );
+    }
+
+    this.replaceActiveMessages(messages.slice(0, index + 1));
     userMessage.content = text;
     this.editingMessageId = null;
-    this.threadId = null;
+    this.setActiveCodexThreadId(null);
 
     const mode = userMessage.mode ?? this.mode;
     this.mode = mode;
@@ -621,7 +869,7 @@ export class KitChatView extends ItemView {
     event: CodexStreamEvent,
   ): void {
     if (event.type === "thread.started") {
-      this.threadId = event.threadId;
+      this.setActiveCodexThreadId(event.threadId);
       return;
     }
     if (event.type === "status" || event.type === "turn.started") {
@@ -733,7 +981,8 @@ export class KitChatView extends ItemView {
       `${mentionPrefix}${text}`,
       { mode: this.mode },
     );
-    this.messages.push(userMessage);
+    this.activeMessages().push(userMessage);
+    this.touchActiveThread();
 
     const mentions = [...this.mentions];
     await this.runAssistantTurn({
@@ -775,36 +1024,40 @@ export class KitChatView extends ItemView {
       mode: options.mode,
       startedAt,
     });
-    this.messages.push(streaming);
+    this.activeMessages().push(streaming);
+    this.touchActiveThread();
     this.renderMessages();
     this.startElapsedTimer();
 
     const activeTab = this.plugin.activeTabService.getContext();
+    const laneMessages = this.activeMessages();
 
     try {
       const result = await this.plugin.chatService.startTurn({
         mode: options.mode,
         userText: options.userText,
-        history: this.messages.filter(
+        history: laneMessages.filter(
           (m) =>
             m.id !== streaming.id && m.id !== options.userMessage.id,
         ),
         activeTab,
         mentions: options.mentions,
-        threadId: this.threadId,
+        threadId: this.getActiveCodexThreadId(),
         vaultPath,
         binary: this.plugin.settings.codexBinary,
         signal: this.abortController.signal,
+        threadContext: this.buildThreadContext(),
         onEvent: (event) => this.applyStreamEvent(streaming, event),
       });
 
       if (result.threadId) {
-        this.threadId = result.threadId;
+        this.setActiveCodexThreadId(result.threadId);
       }
       streaming.content = result.finalText;
       streaming.kind = result.kind;
       streaming.statusLine = undefined;
       this.finishTiming(streaming);
+      this.touchActiveThread();
       this.renderMessages();
     } catch (error) {
       this.finishTiming(streaming);
@@ -820,6 +1073,7 @@ export class KitChatView extends ItemView {
         streaming.statusLine = "Error";
         new Notice("Kit chat failed — see the message in chat.");
       }
+      this.touchActiveThread();
       this.renderMessages();
     } finally {
       this.stopElapsedTimer();
@@ -837,7 +1091,9 @@ export class KitChatView extends ItemView {
       new Notice("Codex CLI is not available. Check Kit settings.");
       return;
     }
-    if (!this.threadId) {
+
+    const codexThreadId = this.getActiveCodexThreadId();
+    if (!codexThreadId) {
       new Notice("No Codex session to apply. Send an Edit plan first.");
       return;
     }
@@ -848,11 +1104,11 @@ export class KitChatView extends ItemView {
       return;
     }
 
-    const proposal = this.messages.find((m) => m.id === proposalMessageId);
+    const laneMessages = this.activeMessages();
+    const proposal = laneMessages.find((m) => m.id === proposalMessageId);
     if (!proposal || proposal.kind !== "proposal") return;
 
-    // Only allow Apply on the latest proposal.
-    const lastProposal = [...this.messages]
+    const lastProposal = [...laneMessages]
       .reverse()
       .find((m) => m.kind === "proposal");
     if (!lastProposal || lastProposal.id !== proposalMessageId) {
@@ -872,13 +1128,14 @@ export class KitChatView extends ItemView {
       mode: "edit",
       startedAt,
     });
-    this.messages.push(streaming);
+    laneMessages.push(streaming);
+    this.touchActiveThread();
     this.renderMessages();
     this.startElapsedTimer();
 
     try {
       const result = await this.plugin.chatService.applyPlan({
-        threadId: this.threadId,
+        threadId: codexThreadId,
         vaultPath,
         binary: this.plugin.settings.codexBinary,
         signal: this.abortController.signal,
@@ -886,13 +1143,14 @@ export class KitChatView extends ItemView {
       });
 
       if (result.threadId) {
-        this.threadId = result.threadId;
+        this.setActiveCodexThreadId(result.threadId);
       }
       streaming.content = result.finalText;
       streaming.kind = "applied";
       streaming.statusLine = undefined;
       this.finishTiming(streaming);
       proposal.kind = "normal";
+      this.touchActiveThread();
       this.renderMessages();
       new Notice("Plan applied — check your vault notes.");
     } catch (error) {
@@ -909,6 +1167,7 @@ export class KitChatView extends ItemView {
         streaming.statusLine = "Error";
         new Notice("Apply failed — see the message in chat.");
       }
+      this.touchActiveThread();
       this.renderMessages();
     } finally {
       this.stopElapsedTimer();

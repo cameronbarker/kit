@@ -412,3 +412,118 @@
   font-size: var(--font-ui-smaller);
   line-height: 1.35;
 }
+
+.kit-chat__thread-chrome--empty {
+  display: none;
+}
+
+.kit-chat__thread-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.kit-chat__thread-back {
+  margin: 0;
+  padding: 0.25rem 0.55rem;
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+}
+
+.kit-chat__thread-label {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kit-chat__thread-parent-preview {
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radius-s, 4px);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.35;
+  white-space: pre-wrap;
+  max-height: 4.5rem;
+  overflow: hidden;
+}
+
+.kit-chat__parent-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid var(--text-accent);
+  background: var(--background-secondary);
+  border-radius: 0 var(--radius-s, 4px) var(--radius-s, 4px) 0;
+}
+
+.kit-chat__parent-quote-label {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kit-chat__parent-quote-text {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.kit-chat__reply {
+  margin: 0;
+  padding: 0.15rem;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+.kit-chat__reply:hover {
+  color: var(--text-normal);
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.kit-chat__reply svg {
+  width: 14px;
+  height: 14px;
+}
+
+.kit-chat__reply-chip {
+  align-self: flex-start;
+  margin: 0.35rem 0 0;
+  padding: 0.15rem 0.45rem;
+  border: none;
+  border-radius: var(--radius-s, 4px);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kit-chat__reply-chip:hover {
+  background: var(--background-modifier-hover);
+  box-shadow: none;
+}
+
+.kit-chat__reply-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

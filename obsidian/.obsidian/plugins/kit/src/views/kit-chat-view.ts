@@ -30,9 +30,7 @@ export class KitChatView extends ItemView {
   private mentions: ChatDocumentRef[] = [];
   private mode: ChatMode = "ask";
   private listEl: HTMLElement | null = null;
-  private contextEl: HTMLElement | null = null;
   private mentionsEl: HTMLElement | null = null;
-  private subtitleEl: HTMLElement | null = null;
   private threadChromeEl: HTMLElement | null = null;
   private inputEl: HTMLTextAreaElement | null = null;
   private modeAskBtn: HTMLButtonElement | null = null;
@@ -43,12 +41,13 @@ export class KitChatView extends ItemView {
   private mentionModalOpen = false;
   private abortController: AbortController | null = null;
   private codexReady: boolean | null = null;
-  private codexStatusEl: HTMLElement | null = null;
   private elapsedTimer: number | null = null;
   /** User message currently open for in-place edit. */
   private editingMessageId: string | null = null;
   /** Draft @ attachments while editing a user message. */
   private editingMentions: ChatDocumentRef[] = [];
+  /** Message ids whose bodies are collapsed in the UI. */
+  private collapsedMessageIds = new Set<string>();
 
   constructor(leaf: WorkspaceLeaf, plugin: KitPlugin) {
     super(leaf);
@@ -79,12 +78,6 @@ export class KitChatView extends ItemView {
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", (leaf) => {
         this.plugin.activeTabService.onActiveLeafChange(leaf);
-        this.updateContextLabel();
-      }),
-    );
-    this.registerEvent(
-      this.app.workspace.on("file-open", () => {
-        this.updateContextLabel();
       }),
     );
     void this.refreshCodexStatus();
@@ -95,16 +88,13 @@ export class KitChatView extends ItemView {
     this.abortController?.abort();
     this.contentEl.empty();
     this.listEl = null;
-    this.contextEl = null;
     this.mentionsEl = null;
-    this.subtitleEl = null;
     this.threadChromeEl = null;
     this.inputEl = null;
     this.modeAskBtn = null;
     this.modeEditBtn = null;
     this.sendBtn = null;
     this.cancelBtn = null;
-    this.codexStatusEl = null;
   }
 
   private inThread(): boolean {
@@ -228,30 +218,18 @@ export class KitChatView extends ItemView {
   private async refreshCodexStatus(): Promise<void> {
     if (!Platform.isDesktopApp) {
       this.codexReady = false;
-      this.updateCodexStatusLabel(
-        "Codex chat requires the Obsidian desktop app.",
-      );
       this.updateActionButtons();
       return;
     }
 
     const result = await checkCodexBinary(this.plugin.settings.codexBinary);
     this.codexReady = result.ok;
-    if (result.ok) {
-      const bits = ["Codex ready"];
-      if (result.version) bits.push(result.version);
-      this.updateCodexStatusLabel(bits.join(" · "));
-    } else {
-      this.updateCodexStatusLabel(
-        `Codex not found. Install the CLI or set Kit settings → Codex binary to /usr/local/bin/codex. ${result.error ?? ""}`.trim(),
+    if (!result.ok) {
+      new Notice(
+        `Codex not found. Set Kit settings → Codex binary (e.g. /usr/local/bin/codex).`,
       );
     }
     this.updateActionButtons();
-  }
-
-  private updateCodexStatusLabel(text: string): void {
-    if (!this.codexStatusEl) return;
-    this.codexStatusEl.setText(text);
   }
 
   private render(): void {
@@ -260,7 +238,6 @@ export class KitChatView extends ItemView {
     root.addClass("kit-chat");
 
     if (!Platform.isDesktopApp) {
-      root.createEl("h2", { text: "Kit chat", cls: "kit-chat__title" });
       root.createEl("p", {
         text: "Codex chat requires the Obsidian desktop app.",
         cls: "kit-chat__subtitle",
@@ -268,19 +245,8 @@ export class KitChatView extends ItemView {
       return;
     }
 
-    root.createEl("h2", { text: "Kit chat", cls: "kit-chat__title" });
-    this.subtitleEl = root.createEl("p", {
-      cls: "kit-chat__subtitle",
-    });
-
     this.threadChromeEl = root.createDiv({ cls: "kit-chat__thread-chrome" });
     this.updateThreadChrome();
-
-    this.codexStatusEl = root.createDiv({ cls: "kit-chat__codex-status" });
-    this.updateCodexStatusLabel("Checking Codex…");
-
-    this.contextEl = root.createDiv({ cls: "kit-chat__context" });
-    this.updateContextLabel();
 
     this.listEl = root.createDiv({ cls: "kit-chat__messages" });
     this.renderMessages();
@@ -376,14 +342,6 @@ export class KitChatView extends ItemView {
   }
 
   private updateThreadChrome(): void {
-    if (this.subtitleEl) {
-      this.subtitleEl.setText(
-        this.inThread()
-          ? "Thread — Ask / Edit stay scoped to this fork."
-          : "Ask answers read-only. Edit plans changes — Apply writes them.",
-      );
-    }
-
     if (!this.threadChromeEl) return;
     this.threadChromeEl.empty();
 
@@ -481,33 +439,6 @@ export class KitChatView extends ItemView {
     }
 
     this.abortController.abort();
-  }
-
-  private updateContextLabel(): void {
-    if (!this.contextEl) return;
-
-    const context = this.plugin.activeTabService.getContext();
-    this.contextEl.empty();
-    this.contextEl.createEl("span", {
-      text: "Looking at",
-      cls: "kit-chat__context-label",
-    });
-
-    if (!context) {
-      this.contextEl.createEl("span", {
-        text: "No main tab",
-        cls: "kit-chat__context-value kit-chat__context-value--empty",
-      });
-      return;
-    }
-
-    this.contextEl.createEl("span", {
-      text: context.filePath ?? context.title,
-      cls: "kit-chat__context-value",
-      attr: {
-        title: `${context.viewType}${context.filePath ? ` · ${context.filePath}` : ""}`,
-      },
-    });
   }
 
   private renderMentions(): void {
@@ -628,17 +559,58 @@ export class KitChatView extends ItemView {
     );
   }
 
+  private isMessageCollapsed(messageId: string): boolean {
+    return this.collapsedMessageIds.has(messageId);
+  }
+
+  private toggleMessageCollapsed(messageId: string): void {
+    if (this.editingMessageId === messageId) return;
+    if (this.collapsedMessageIds.has(messageId)) {
+      this.collapsedMessageIds.delete(messageId);
+    } else {
+      this.collapsedMessageIds.add(messageId);
+    }
+    this.renderMessages();
+  }
+
   private renderMessageBubble(message: ChatMessage): void {
     if (!this.listEl) return;
+
+    const editing = this.editingMessageId === message.id;
+    const collapsed =
+      !editing &&
+      message.kind !== "streaming" &&
+      this.isMessageCollapsed(message.id);
 
     const kindClass = message.kind
       ? ` kit-chat__bubble--${message.kind}`
       : "";
+    const collapsedClass = collapsed ? " kit-chat__bubble--collapsed" : "";
     const bubble = this.listEl.createDiv({
-      cls: `kit-chat__bubble kit-chat__bubble--${message.role}${kindClass}`,
+      cls: `kit-chat__bubble kit-chat__bubble--${message.role}${kindClass}${collapsedClass}`,
     });
 
     const header = bubble.createDiv({ cls: "kit-chat__bubble-header" });
+
+    const collapseBtn = header.createEl("button", {
+      cls: "kit-chat__collapse",
+      attr: {
+        type: "button",
+        title: collapsed ? "Expand message" : "Collapse message",
+        "aria-label": collapsed ? "Expand message" : "Collapse message",
+        "aria-expanded": collapsed ? "false" : "true",
+      },
+    });
+    setIcon(collapseBtn, collapsed ? "chevron-right" : "chevron-down");
+    if (editing || message.kind === "streaming") {
+      collapseBtn.disabled = true;
+      collapseBtn.addClass("is-disabled");
+    } else {
+      this.registerDomEvent(collapseBtn, "click", () => {
+        this.toggleMessageCollapsed(message.id);
+      });
+    }
+
     header.createEl("span", {
       text: message.role === "user" ? "You" : "Kit",
       cls: "kit-chat__role",
@@ -680,11 +652,7 @@ export class KitChatView extends ItemView {
       });
     }
 
-    if (
-      message.role === "user" &&
-      !this.sending &&
-      this.editingMessageId !== message.id
-    ) {
+    if (message.role === "user" && !this.sending && !editing) {
       const editBtn = header.createEl("button", {
         cls: "kit-chat__edit",
         attr: {
@@ -712,6 +680,29 @@ export class KitChatView extends ItemView {
       void this.copyMessage(message.content);
     });
 
+    if (collapsed) {
+      if (!this.inThread()) {
+        const thread = this.threads.get(message.id);
+        const replyCount = thread?.messages.length ?? 0;
+        if (replyCount > 0) {
+          const chip = bubble.createEl("button", {
+            text: replyCount === 1 ? "1 reply" : `${replyCount} replies`,
+            cls: "kit-chat__reply-chip",
+            attr: {
+              type: "button",
+              title: "Open thread",
+              "aria-label": "Open thread",
+            },
+          });
+          chip.disabled = this.sending;
+          this.registerDomEvent(chip, "click", () => {
+            this.openThread(message.id);
+          });
+        }
+      }
+      return;
+    }
+
     if (message.statusLine) {
       bubble.createEl("p", {
         text: message.statusLine,
@@ -719,7 +710,7 @@ export class KitChatView extends ItemView {
       });
     }
 
-    if (message.role === "user" && this.editingMessageId === message.id) {
+    if (editing) {
       this.renderUserMessageEditor(bubble, message);
     } else {
       if (message.role === "user") {
@@ -908,6 +899,7 @@ export class KitChatView extends ItemView {
     message.mentions = parsed.mentions;
     this.editingMentions = [...parsed.mentions];
     this.editingMessageId = messageId;
+    this.collapsedMessageIds.delete(messageId);
     this.renderMessages();
   }
 

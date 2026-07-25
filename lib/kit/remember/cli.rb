@@ -23,6 +23,10 @@ module Kit::Remember
 
     def run
       parse_options!
+      return run_accept if @argv.first == "accept"
+      return run_reject if @argv.first == "reject"
+      return run_pending if @argv.first == "pending"
+
       input = @argv.shift || "latest"
       raise Error, "unexpected arguments: #{@argv.join(' ')}" unless @argv.empty?
 
@@ -54,7 +58,7 @@ module Kit::Remember
 
     def parse_options!
       parser = OptionParser.new do |opts|
-        opts.banner = "Usage: kit remember [options] [INPUT]"
+        opts.banner = "Usage: kit remember [options] [INPUT]\n       kit remember accept [options] ITEM_ID [ITEM_ID...]\n       kit remember reject [options] ITEM_ID [ITEM_ID...]\n       kit remember pending [options]"
         opts.on("--json", "Emit machine-readable JSON") { @options[:json] = true }
         opts.on("--dry-run", "Show planned writes without modifying notes") { @options[:dry_run] = true }
         opts.on("--vault DIR", "Durable notes root (default: KIT_VAULT or obsidian/)") do |dir|
@@ -69,6 +73,54 @@ module Kit::Remember
         end
       end
       parser.parse!(@argv)
+    end
+
+    def run_accept
+      @argv.shift
+      ids = @argv.dup
+      result = TrustGate.new(vault_dir: resolve_vault).accept(ids)
+      render_trust_update(result)
+      result["missing_ids"].empty? ? 0 : 1
+    end
+
+    def run_reject
+      @argv.shift
+      ids = @argv.dup
+      result = TrustGate.new(vault_dir: resolve_vault).reject(ids)
+      render_trust_update(result)
+      result["missing_ids"].empty? ? 0 : 1
+    end
+
+    def run_pending
+      @argv.shift
+      raise Error, "unexpected arguments: #{@argv.join(' ')}" unless @argv.empty?
+
+      result = TrustGate.new(vault_dir: resolve_vault).pending
+      if @options[:json]
+        @out.puts JSON.pretty_generate(result)
+      else
+        @out.puts "Pending review: #{result['count']}"
+        @out.puts "  vault: #{result['vault']}"
+        result.fetch("items").each do |item|
+          owner = item["owner"].to_s.empty? ? "unknown" : item["owner"]
+          @out.puts "  - #{item['id']}: #{item['text']} (status: #{item['status'] || 'unknown'}; owner: #{owner})"
+        end
+      end
+      0
+    end
+
+    def render_trust_update(result)
+      if @options[:json]
+        @out.puts JSON.pretty_generate(result)
+        return
+      end
+
+      @out.puts "OK (remember #{result['action']}): #{result['updated'].length} updated"
+      @out.puts "  vault: #{result['vault']}"
+      result.fetch("updated").each do |item|
+        @out.puts "  - #{item['id']}: #{item['previous_status'] || 'unknown'} -> #{result['status']}"
+      end
+      result.fetch("missing_ids").each { |id| @err.puts "Warning: item not found: #{id}" }
     end
 
     def resolve_input(input)

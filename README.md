@@ -8,7 +8,7 @@ It turns conversations, notes, calendar context, and work signals into commitmen
 
 ## Current Status
 
-This repository currently contains the first root-level `kit` CLI, the first integrated `kit listen` implementation, the first deterministic `kit notice` extractor, the first `kit remember` durable-note writer, a thin macOS menu bar helper, and the intended Kit Obsidian plugin surface. The rest of the command surface remains a north star for the intended workflow.
+This repository currently contains the first root-level `kit` CLI, the first integrated `kit listen` implementation, the first deterministic `kit notice` extractor, the first `kit remember` durable-note writer, the first `kit surface` daily attention list, a thin macOS menu bar helper, and the intended Kit Obsidian plugin surface. The rest of the command surface remains a north star for the intended workflow.
 
 The old `Listen/` prototype remains ignored as a migration archive because it contains standalone project scaffolding, local recordings/transcripts, a nested `.git`, and generated Python environment artifacts. Useful source, tests, and Python worker files have been migrated into `lib/kit/listen/` and `test/kit/listen/`.
 
@@ -27,6 +27,8 @@ bin/kit notice --me "Cameron" latest
 bin/kit notice --json --me "Cameron" transcripts/json/platform-sync.json
 bin/kit remember --vault obsidian latest
 bin/kit remember --json --dry-run latest
+bin/kit surface --vault obsidian
+bin/kit surface --json
 bin/kit status --json
 bin/kit notify "Review open commitments"
 bin/kit menubar
@@ -66,6 +68,8 @@ The `listen` command is implemented as a local recording and transcription pipel
 The `notice` command reads normalized transcript JSON from `kit listen` and writes review-required extracts of possible commitments, decisions, and open loops. It is deterministic and offline in this first version; no LLM, network, or external Ruby gem is required. Pass `--me NAME` or set `KIT_ME` to classify first-person commitments as yours. Without an identity, `notice` still runs but marks commitment perspective for human review instead of guessing.
 
 The `remember` command reads notice extract JSON and upserts possible commitments, decisions, and open loops into durable Markdown notes. It preserves review-required status and citations rather than promoting possible items into trusted facts. By default it writes into the ignored repo-local `obsidian/` notes area; pass `--vault DIR` or set `KIT_VAULT` to target another vault.
+
+The `surface` command reads Kit-managed durable notes and shows the daily attention list. It uses Obsidian checkbox state as the current completion source of truth and keeps possible or unknown-perspective items in a needs-review lane instead of treating them as trusted. By default it reads from the ignored repo-local `obsidian/` notes area; pass `--vault DIR` or set `KIT_VAULT` to target another durable notes root.
 
 The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier` and uses `assets/kit-icon.png` as its notification app icon. The `status --json` command exposes a stable app bridge contract for future non-CLI surfaces. The `menubar` command launches the thin Swift helper in `mac/menubar/` against this checkout's `bin/kit`. Other planned commands currently return an intentional "not implemented yet" message.
 
@@ -183,6 +187,9 @@ bin/kit remember latest
 bin/kit remember platform-sync
 bin/kit remember --vault obsidian platform-sync
 bin/kit remember --json --dry-run latest
+bin/kit remember pending --vault obsidian
+bin/kit remember accept --vault obsidian platform-sync-c001
+bin/kit remember reject --vault obsidian platform-sync-c002
 ```
 
 Default note targets:
@@ -195,6 +202,32 @@ Open Loops/Open Loops.md
 ```
 
 Remembered items are written as Kit-managed Markdown blocks keyed by stable notice item ids, for example `<!-- kit:item platform-sync-c001 -->`. Re-running `remember` updates existing Kit-managed blocks instead of blindly duplicating them. Keep manual edits outside those managed blocks.
+
+Remember also owns the thin trust gate for managed items. `kit remember accept ITEM_ID...` changes only the inline trust status to `accepted`; it does not check the Obsidian checkbox or change text, owner, source, citations, or metadata. `kit remember reject ITEM_ID...` changes only the inline trust status to `rejected`. `kit remember pending` lists open, untrusted, non-rejected managed items so ids can be reviewed before accepting.
+
+## Surface
+
+`kit surface` reads the durable notes root and produces a read-only daily attention list from Kit-managed item blocks. Vault home means the durable notes root: by default this is repo-local `obsidian/`, and it can be overridden with `--vault DIR` or `KIT_VAULT`.
+
+Common commands:
+
+```bash
+bin/kit surface
+bin/kit surface --vault obsidian
+bin/kit surface --json
+bin/kit surface --me "Cameron"
+bin/kit surface --needs-review-only
+```
+
+Surface v1 reads:
+
+```text
+Commitments/Commitments.md
+Decisions/Decisions.md
+Open Loops/Open Loops.md
+```
+
+It does not scrape arbitrary freeform notes. Completion comes from the Obsidian checkbox in the managed item block for now. Trust is separate: `possible`, missing-status, unknown-owner, and unknown-perspective items are shown as needs-review so they remain useful without becoming official commitments. Accepted items move into actionable lanes while still remaining open until their checkbox is checked. Rejected items remain in notes but are ignored by default surface attention.
 
 ## Development
 

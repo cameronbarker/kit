@@ -12,4 +12,5 @@ end
 
 require_relative "remember/planner"
 require_relative "remember/notebook"
+require_relative "remember/trust_gate"
 require_relative "remember/cli"

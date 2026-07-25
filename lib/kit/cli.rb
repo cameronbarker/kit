@@ -5,10 +5,6 @@ require "json"
 module Kit
   class CLI
     PLANNED_COMMANDS = {
-      "prepare" => "Build context packs for meetings and 1:1s",
-      "brief" => "Draft leadership and stakeholder updates",
-      "followup" => "Track promises, waiting-on items, and stale loops",
-      "reflect" => "Review patterns over time",
       "qmd" => "Manage/search the local qmd index"
     }.freeze
 
@@ -17,6 +13,10 @@ module Kit
       "notice" => "Extract commitments, decisions, and open loops",
       "remember" => "Write notice items into durable notes",
       "surface" => "Show what needs attention now",
+      "prepare" => "Build context packs for meetings and 1:1s",
+      "followup" => "Track promises, waiting-on items, and stale loops",
+      "brief" => "Draft leadership and stakeholder updates",
+      "reflect" => "Review patterns over time",
       "notify" => "Send a simple local Kit notification",
       "status" => "Show machine-readable Kit app bridge status",
       "menubar" => "Start the macOS Kit menu bar helper"
@@ -56,6 +56,14 @@ module Kit
         Remember::CLI.run(@argv)
       when "surface"
         Surface::CLI.run(@argv)
+      when "prepare"
+        Prepare::CLI.run(@argv)
+      when "followup"
+        Followup::CLI.run(@argv)
+      when "brief"
+        Brief::CLI.run(@argv)
+      when "reflect"
+        Reflect::CLI.run(@argv)
       when *PLANNED_COMMANDS.keys
         print_planned(command)
         2

@@ -73,6 +73,7 @@ module Kit::Surface
         "owner" => inline["owner"],
         "status" => inline["status"],
         "completion" => checked?(checkbox) ? "completed" : "open",
+        "due_date" => due_date(metadata),
         "source" => inline["source"],
         "notice" => metadata["Notice"],
         "transcript" => metadata["Transcript"],
@@ -116,6 +117,12 @@ module Kit::Surface
       return nil if text.empty?
 
       text.start_with?('"') && text.end_with?('"') ? text[1...-1].gsub('\"', '"') : text
+    end
+
+    def due_date(metadata)
+      value = metadata["Due"] || metadata["Due Date"] || metadata["Due date"]
+      text = value.to_s.strip
+      text.empty? ? nil : text
     end
 
     def checked?(checkbox)

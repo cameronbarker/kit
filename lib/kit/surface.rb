@@ -18,5 +18,6 @@ module Kit
 end
 
 require_relative "surface/parser"
+require_relative "surface/trust"
 require_relative "surface/report"
 require_relative "surface/cli"

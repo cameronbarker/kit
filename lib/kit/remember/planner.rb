@@ -41,7 +41,7 @@ module Kit::Remember
     private
 
     def item_operations
-      Array(extract["items"]).filter_map do |item|
+      Array(extract["items"]).map do |item|
         relative_path = NOTE_BY_BUCKET[item["bucket"]]
         next unless relative_path
 
@@ -52,7 +52,7 @@ module Kit::Remember
           "section" => "From #{extract.fetch('title', 'Untitled Extract')}",
           "content" => render_item(item)
         }
-      end
+      end.compact
     end
 
     def inbox_operation(operations)

@@ -29,6 +29,7 @@ class Kit::SurfaceParserTest < Minitest::Test
         - [ ] Follow up with Priya. _(possible, owner: Cameron, source: Platform, Sync @ 00:00:12)_
           - Type: commitment
           - Bucket: commitments_i_made
+          - Due: 2026-08-01
           - Notice: /tmp/extracts/json/platform-sync.notice.json
           - Transcript: /tmp/transcripts/json/platform-sync.json
           - Speaker: Cameron / SPEAKER_00
@@ -55,6 +56,7 @@ class Kit::SurfaceParserTest < Minitest::Test
     assert_equal "Platform, Sync @ 00:00:12", item["source"]
     assert_equal "commitments_i_made", item["bucket"]
     assert_equal "open", item["completion"]
+    assert_equal "2026-08-01", item["due_date"]
     assert_equal "I'll follow up with Priya.", item["quote"]
     assert_equal "completed", completed["completion"]
     assert_includes result["warnings"], "Missing note: Open Loops/Open Loops.md"

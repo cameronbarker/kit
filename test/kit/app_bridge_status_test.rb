@@ -24,8 +24,16 @@ class KitAppBridgeStatusTest < Minitest::Test
     assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "status", "--json"]
     assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "notice", "--json"]
     assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "remember", "--json"]
+    assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "followup", "--overdue", "--json"]
+    assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "reflect", "--json"]
     assert_equal ["kit", "surface", "--json"], status.dig("commands", "open_loops", "command")
     assert_equal true, status.dig("commands", "open_loops", "implemented")
+    assert_equal ["kit", "followup", "--overdue", "--json"], status.dig("commands", "overdue_commitments", "command")
+    assert_equal true, status.dig("commands", "overdue_commitments", "implemented")
+    assert_equal ["kit", "brief", "--json"], status.dig("commands", "brief", "command")
+    assert_equal true, status.dig("commands", "brief", "implemented")
+    assert_equal ["kit", "reflect", "--json"], status.dig("commands", "reflect", "command")
+    assert_equal true, status.dig("commands", "reflect", "implemented")
     assert_equal true, status.dig("commands", "today_surface", "implemented")
     assert_equal true, status.dig("commands", "listen", "implemented")
     assert_equal true, status.dig("commands", "listen_pause", "implemented")

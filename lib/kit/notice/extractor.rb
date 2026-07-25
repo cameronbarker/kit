@@ -201,7 +201,7 @@ module Kit::Notice
     end
 
     def matched_signals(text, patterns)
-      patterns.filter_map { |pattern| text[pattern]&.strip }.uniq
+      patterns.map { |pattern| text[pattern]&.strip }.compact.uniq
     end
 
     def named_owner(text)

@@ -15,7 +15,7 @@ module Kit
         "overdue_commitments" => {
           "label" => "Overdue commitments",
           "command" => ["kit", "followup", "--overdue", "--json"],
-          "implemented" => false
+          "implemented" => true
         },
         "today_surface" => {
           "label" => "Open today's surface",
@@ -50,7 +50,12 @@ module Kit
         "brief" => {
           "label" => "Run brief",
           "command" => ["kit", "brief", "--json"],
-          "implemented" => false
+          "implemented" => true
+        },
+        "reflect" => {
+          "label" => "Run reflection",
+          "command" => ["kit", "reflect", "--json"],
+          "implemented" => true
         },
         "quick_capture" => {
           "label" => "Quick capture",
@@ -97,8 +102,10 @@ module Kit
             ["kit", "notice", "--json"],
             ["kit", "remember", "--json"],
             ["kit", "surface", "--json"],
+            ["kit", "followup", "--overdue", "--json"],
             ["kit", "prepare", "--next", "--json"],
-            ["kit", "brief", "--json"]
+            ["kit", "brief", "--json"],
+            ["kit", "reflect", "--json"]
           ]
         }
       end

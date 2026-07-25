@@ -8,7 +8,7 @@ It turns conversations, notes, calendar context, and work signals into commitmen
 
 ## Current Status
 
-This repository currently contains the first root-level `kit` CLI, the first integrated `kit listen` implementation, the first deterministic `kit notice` extractor, the first `kit remember` durable-note writer, the first `kit surface` daily attention list, a thin macOS menu bar helper, and the intended Kit Obsidian plugin surface. The rest of the command surface remains a north star for the intended workflow.
+This repository currently contains the first root-level `kit` CLI, the first integrated `kit listen` implementation, the first deterministic `kit notice` extractor, the first `kit remember` durable-note writer, the first `kit surface` daily attention list, the first `kit prepare` 1:1 prep pack, the first `kit followup`, `kit brief`, and `kit reflect` loops, a thin macOS menu bar helper, and the intended Kit Obsidian plugin surface. The rest of the command surface remains a north star for the intended workflow.
 
 The old `Listen/` prototype remains ignored as a migration archive because it contains standalone project scaffolding, local recordings/transcripts, a nested `.git`, and generated Python environment artifacts. Useful source, tests, and Python worker files have been migrated into `lib/kit/listen/` and `test/kit/listen/`.
 
@@ -29,6 +29,11 @@ bin/kit remember --vault obsidian latest
 bin/kit remember --json --dry-run latest
 bin/kit surface --vault obsidian
 bin/kit surface --json
+bin/kit prepare --person "Priya" --vault obsidian
+bin/kit prepare "Priya" --json
+bin/kit brief --vault obsidian
+bin/kit followup --me "Cameron"
+bin/kit reflect --json
 bin/kit status --json
 bin/kit notify "Review open commitments"
 bin/kit menubar
@@ -71,7 +76,9 @@ The `remember` command reads notice extract JSON and upserts possible commitment
 
 The `surface` command reads Kit-managed durable notes and shows the daily attention list. It uses Obsidian checkbox state as the current completion source of truth and keeps possible or unknown-perspective items in a needs-review lane instead of treating them as trusted. By default it reads from the ignored repo-local `obsidian/` notes area; pass `--vault DIR` or set `KIT_VAULT` to target another durable notes root.
 
-The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier` and uses `assets/kit-icon.png` as its notification app icon. The `status --json` command exposes a stable app bridge contract for future non-CLI surfaces. The `menubar` command launches the thin Swift helper in `mac/menubar/` against this checkout's `bin/kit`. Other planned commands currently return an intentional "not implemented yet" message.
+The `reflect` command writes a weekly reflection artifact from Kit-managed durable notes and filename-only weekly brief history. It is deterministic in v1: no LLM coaching, no people scoring, no calendar analytics, and no freeform note scraping.
+
+The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier` and uses `assets/kit-icon.png` as its notification app icon. The `status --json` command exposes a stable app bridge contract for future non-CLI surfaces. The `menubar` command launches the thin Swift helper in `mac/menubar/` against this checkout's `bin/kit`. Remaining planned commands currently return an intentional "not implemented yet" message.
 
 ## App Bridge
 
@@ -228,6 +235,48 @@ Open Loops/Open Loops.md
 ```
 
 It does not scrape arbitrary freeform notes. Completion comes from the Obsidian checkbox in the managed item block for now. Trust is separate: `possible`, missing-status, unknown-owner, and unknown-perspective items are shown as needs-review so they remain useful without becoming official commitments. Accepted items move into actionable lanes while still remaining open until their checkbox is checked. Rejected items remain in notes but are ignored by default surface attention.
+
+### Prepare
+
+`kit prepare` builds a thin 1:1 prep pack from Kit-managed durable notes. It is intentionally read-only over existing commitments, decisions, and open loops; the only write is the generated prep note. Vault home means the durable notes root: by default this is repo-local `obsidian/`, and it can be overridden with `--vault DIR` or `KIT_VAULT`.
+
+Common commands:
+
+```bash
+bin/kit prepare --person "Priya"
+bin/kit prepare "Priya"
+bin/kit prepare --person "Priya" --json
+bin/kit prepare --person "Priya" --me "Cameron"
+```
+
+Prepare v1 writes:
+
+```text
+1-1s/<Person> Prep.md
+```
+
+It matches the person case-insensitively against managed item owner, speaker, text, quote, and source fields. Open accepted/trusted/confirmed/actionable items are grouped into commitments, open loops, and recent related decisions. Possible or uncertain items are kept in a separate needs-review section and are not treated as confirmed facts. Completed checkbox items and rejected items are ignored. `kit prepare --next` is reserved for future calendar-backed next-meeting prep and currently returns a clear unimplemented response.
+
+## Reflect
+
+`kit reflect` writes a thin weekly reflection from Kit-managed durable notes. Vault home means the durable notes root: by default this is repo-local `obsidian/`, and it can be overridden with `--vault DIR` or `KIT_VAULT`.
+
+Common commands:
+
+```bash
+bin/kit reflect
+bin/kit reflect --vault obsidian
+bin/kit reflect --json
+bin/kit reflect --me "Cameron"
+```
+
+Reflect v1 writes:
+
+```text
+Reflections/Reflection - YYYY-MM-DD.md
+```
+
+It summarizes trusted current-state patterns only: open vs completed commitments, no-due-date slipping candidates, commitment load, open decisions, open loops, needs-review backlog, and weekly brief history by `Weekly Briefs/Brief - YYYY-MM-DD.md` filenames. It does not treat possible items as confirmed patterns, ignores rejected items, and labels unsupported pattern questions as insufficient signal.
 
 ## Development
 

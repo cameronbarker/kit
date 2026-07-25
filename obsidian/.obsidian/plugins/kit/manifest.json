@@ -5,5 +5,5 @@
   "minAppVersion": "1.4.0",
   "description": "Kit — personal leadership toolkit home for engineering managers.",
   "author": "Kit",
-  "isDesktopOnly": false
+  "isDesktopOnly": true
 }

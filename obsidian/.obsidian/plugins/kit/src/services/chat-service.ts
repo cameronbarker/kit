@@ -2,13 +2,22 @@ import type {
   ActiveTabContext,
   ChatDocumentRef,
   ChatMessage,
+  ChatMessageKind,
+  ChatMode,
 } from "../types";
+import {
+  runCodexExec,
+  type CodexStreamEvent,
+} from "./codex-exec";
 
 let messageSeq = 0;
 
 export function createChatMessage(
   role: ChatMessage["role"],
   content: string,
+  extras?: Partial<
+    Pick<ChatMessage, "kind" | "statusLine" | "mode" | "startedAt" | "durationMs">
+  >,
 ): ChatMessage {
   messageSeq += 1;
   return {
@@ -16,6 +25,7 @@ export function createChatMessage(
     role,
     content,
     createdAt: Date.now(),
+    ...extras,
   };
 }
 
@@ -32,23 +42,148 @@ function formatMentions(documents: ChatDocumentRef[]): string {
   return `Mentions: ${documents.map((doc) => doc.path).join(", ")}`;
 }
 
+const APPLY_PROMPT =
+  "Apply the plan you proposed. Make the vault edits now. Do not expand scope.";
+
+export interface ChatTurnInput {
+  mode: ChatMode;
+  userText: string;
+  history: ChatMessage[];
+  activeTab: ActiveTabContext | null;
+  mentions: ChatDocumentRef[];
+  threadId: string | null;
+  vaultPath: string;
+  binary: string;
+  signal?: AbortSignal;
+  onEvent: (event: CodexStreamEvent) => void;
+}
+
+export interface ChatTurnResult {
+  threadId: string | null;
+  finalText: string;
+  kind: ChatMessageKind;
+}
+
+export interface ApplyPlanInput {
+  threadId: string;
+  vaultPath: string;
+  binary: string;
+  signal?: AbortSignal;
+  onEvent: (event: CodexStreamEvent) => void;
+}
+
+function modeInstructions(mode: ChatMode): string {
+  if (mode === "ask") {
+    return [
+      "Mode: ASK (read-only).",
+      "Answer the user's question using vault context.",
+      "Do not edit, create, or delete any files.",
+      "Do not propose a write plan unless they ask how something could be changed.",
+    ].join("\n");
+  }
+
+  return [
+    "Mode: EDIT (plan only — do not write yet).",
+    "Produce a concrete plan for the requested vault changes.",
+    "List every file you would create or modify and summarize the edits.",
+    "Do not apply the edits in this turn. Wait for an explicit apply instruction.",
+  ].join("\n");
+}
+
+function buildPrompt(input: ChatTurnInput): string {
+  const recent = input.history
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-8)
+    .map((m) => `${m.role === "user" ? "User" : "Kit"}: ${m.content}`)
+    .join("\n\n");
+
+  return [
+    "You are Kit's vault assistant, running inside an Obsidian vault.",
+    `Working directory is the vault root: ${input.vaultPath}`,
+    modeInstructions(input.mode),
+    formatActiveTab(input.activeTab),
+    formatMentions(input.mentions),
+    recent ? `Recent chat:\n${recent}` : "",
+    `User request:\n${input.userText}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 /**
- * Placeholder chat backend. Swap this for a real model/provider later.
+ * Codex-backed chat. Ask is read-only; Edit plans then Apply writes.
  */
 export class ChatService {
-  async reply(
-    history: ChatMessage[],
-    activeTab: ActiveTabContext | null,
-    mentions: ChatDocumentRef[],
-  ): Promise<ChatMessage> {
-    void history;
-    return createChatMessage(
-      "assistant",
-      [
-        "Chat is scaffolded. Wire an AI provider here next.",
-        formatActiveTab(activeTab),
-        formatMentions(mentions),
-      ].join("\n"),
-    );
+  async startTurn(input: ChatTurnInput): Promise<ChatTurnResult> {
+    let threadId = input.threadId;
+    let finalText = "";
+
+    await runCodexExec({
+      binary: input.binary,
+      vaultPath: input.vaultPath,
+      prompt: buildPrompt(input),
+      sandbox: "read-only",
+      threadId,
+      signal: input.signal,
+      onEvent: (event) => {
+        if (event.type === "thread.started") {
+          threadId = event.threadId;
+        }
+        if (event.type === "agent_text") {
+          finalText = event.replace
+            ? event.text
+            : `${finalText}${event.text}`;
+        }
+        input.onEvent(event);
+      },
+    });
+
+    if (!finalText.trim()) {
+      finalText =
+        input.mode === "edit"
+          ? "Plan ready. Review it, then click Apply to write changes."
+          : "(No reply text from Codex.)";
+    }
+
+    return {
+      threadId,
+      finalText: finalText.trim(),
+      kind: input.mode === "edit" ? "proposal" : "normal",
+    };
+  }
+
+  async applyPlan(input: ApplyPlanInput): Promise<ChatTurnResult> {
+    let threadId: string | null = input.threadId;
+    let finalText = "";
+
+    await runCodexExec({
+      binary: input.binary,
+      vaultPath: input.vaultPath,
+      prompt: APPLY_PROMPT,
+      sandbox: "workspace-write",
+      threadId: input.threadId,
+      signal: input.signal,
+      onEvent: (event) => {
+        if (event.type === "thread.started") {
+          threadId = event.threadId;
+        }
+        if (event.type === "agent_text") {
+          finalText = event.replace
+            ? event.text
+            : `${finalText}${event.text}`;
+        }
+        input.onEvent(event);
+      },
+    });
+
+    if (!finalText.trim()) {
+      finalText = "Applied the planned vault edits.";
+    }
+
+    return {
+      threadId,
+      finalText: finalText.trim(),
+      kind: "applied",
+    };
   }
 }

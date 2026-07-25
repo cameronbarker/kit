@@ -228,11 +228,56 @@
   margin: 0;
 }
 
+.kit-chat__codex-status {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.35;
+}
+
+.kit-chat__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.kit-chat__mode {
+  display: inline-flex;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  overflow: hidden;
+}
+
+.kit-chat__mode-btn {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0.35rem 0.7rem;
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kit-chat__mode-btn.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.kit-chat__mode-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .kit-chat__actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 0.5rem;
+  margin-left: auto;
 }
 
 .kit-chat__mention-btn {
@@ -240,4 +285,74 @@
   min-width: 2rem;
   padding: 0.35rem 0.55rem;
   font-weight: 650;
+}
+
+.kit-chat__cancel {
+  display: none;
+  margin: 0;
+}
+
+.kit-chat__cancel.is-visible {
+  display: inline-flex;
+}
+
+.kit-chat__status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-style: italic;
+  line-height: 1.35;
+}
+
+.kit-chat__mode-badge {
+  margin-right: auto;
+  margin-left: 0.35rem;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kit-chat__duration {
+  margin-left: auto;
+  margin-right: 0.25rem;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.kit-chat__bubble--streaming {
+  border: 1px dashed var(--background-modifier-border);
+}
+
+.kit-chat__bubble--proposal {
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.kit-chat__bubble--applied {
+  border-left: 3px solid var(--color-green, #4f8a5b);
+}
+
+.kit-chat__bubble--error {
+  border-left: 3px solid var(--text-error);
+}
+
+.kit-chat__proposal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.kit-chat__apply {
+  margin: 0;
+}
+
+.kit-chat__proposal-hint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.35;
 }

@@ -22,6 +22,8 @@ class KitAppBridgeStatusTest < Minitest::Test
     assert_equal "cli_json", status.dig("integration", "mode")
     assert_equal ["/usr/bin/ruby", "/repo/bin/kit"], status.dig("integration", "kit_command")
     assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "status", "--json"]
+    assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "notice", "--json"]
+    assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "remember", "--json"]
     assert_equal ["kit", "surface", "--json"], status.dig("commands", "open_loops", "command")
     assert_equal false, status.dig("commands", "open_loops", "implemented")
     assert_equal true, status.dig("commands", "listen", "implemented")

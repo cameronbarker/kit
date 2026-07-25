@@ -8,11 +8,11 @@ It turns conversations, notes, calendar context, and work signals into commitmen
 
 ## Current Status
 
-This repository currently contains the first root-level `kit` CLI, the first integrated `kit listen` implementation, a thin macOS menu bar helper, and the intended Kit Obsidian plugin surface. The rest of the command surface remains a north star for the intended workflow.
+This repository currently contains the first root-level `kit` CLI, the first integrated `kit listen` implementation, the first deterministic `kit notice` extractor, the first `kit remember` durable-note writer, a thin macOS menu bar helper, and the intended Kit Obsidian plugin surface. The rest of the command surface remains a north star for the intended workflow.
 
 The old `Listen/` prototype remains ignored as a migration archive because it contains standalone project scaffolding, local recordings/transcripts, a nested `.git`, and generated Python environment artifacts. Useful source, tests, and Python worker files have been migrated into `lib/kit/listen/` and `test/kit/listen/`.
 
-This repo intentionally does not track local usage data: `.env`, recordings, transcripts, packaged model files, build outputs, virtual environments, Obsidian workspace state, and local Obsidian playground/tooling folders are ignored.
+This repo intentionally does not track local usage data: `.env`, recordings, transcripts, extracts, packaged model files, build outputs, virtual environments, Obsidian workspace state, local vault notes, and local Obsidian playground/tooling folders are ignored.
 
 ## Usage
 
@@ -23,6 +23,10 @@ bin/kit help
 bin/kit version
 bin/kit listen help
 bin/kit listen status --json
+bin/kit notice --me "Cameron" latest
+bin/kit notice --json --me "Cameron" transcripts/json/platform-sync.json
+bin/kit remember --vault obsidian latest
+bin/kit remember --json --dry-run latest
 bin/kit status --json
 bin/kit notify "Review open commitments"
 bin/kit menubar
@@ -44,11 +48,11 @@ listen -> notice -> remember -> surface -> prepare/brief/followup -> reflect
 
 ```text
 listen      Record and transcribe conversations
+notice      Extract commitments, decisions, and open loops
+remember    Write notice items into durable notes
 notify      Send a simple local Kit notification
 status      Show machine-readable Kit app bridge status
 menubar     Start the macOS Kit menu bar helper
-notice      Extract commitments, decisions, risks, and open loops
-remember    Write reviewed items into Obsidian/PARA
 surface     Show what needs attention now
 prepare     Build context packs for meetings and 1:1s
 brief       Draft leadership and stakeholder updates
@@ -58,6 +62,10 @@ qmd         Manage/search the local qmd index
 ```
 
 The `listen` command is implemented as a local recording and transcription pipeline. It can list ffmpeg audio devices, run chunked background recording sessions, pause/resume/stop an active session, track recording state, show the latest recording metadata, transcribe an existing audio/video file, and re-render transcript artifacts from raw JSON. The older foreground `record` command remains available.
+
+The `notice` command reads normalized transcript JSON from `kit listen` and writes review-required extracts of possible commitments, decisions, and open loops. It is deterministic and offline in this first version; no LLM, network, or external Ruby gem is required. Pass `--me NAME` or set `KIT_ME` to classify first-person commitments as yours. Without an identity, `notice` still runs but marks commitment perspective for human review instead of guessing.
+
+The `remember` command reads notice extract JSON and upserts possible commitments, decisions, and open loops into durable Markdown notes. It preserves review-required status and citations rather than promoting possible items into trusted facts. By default it writes into the ignored repo-local `obsidian/` notes area; pass `--vault DIR` or set `KIT_VAULT` to target another vault.
 
 The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier` and uses `assets/kit-icon.png` as its notification app icon. The `status --json` command exposes a stable app bridge contract for future non-CLI surfaces. The `menubar` command launches the thin Swift helper in `mac/menubar/` against this checkout's `bin/kit`. Other planned commands currently return an intentional "not implemented yet" message.
 
@@ -109,6 +117,10 @@ transcripts/
   md/<slug>.md
   maps/<slug>.speaker-map.yml
 
+extracts/
+  json/<slug>.notice.json
+  md/<slug>.notice.md
+
 model/
   config.json
   model.bin
@@ -137,6 +149,52 @@ bin/kit listen render path/to/meeting.m4a
 For recording, pass `--device` or set `KIT_LISTEN_AUDIO_DEVICE`. The legacy `LEADERSHIP_TRANSCRIPTS_AUDIO_DEVICE` env var is still accepted during migration.
 
 Mock transcription requires no Python ML install. Real local transcription requires Python 3.11 or 3.12 dependencies from `lib/kit/listen/python/requirements.txt`, ffmpeg on `PATH`, and packaged model files in ignored repo-local `model/` storage. Runtime transcription is offline-only and never downloads models.
+
+## Notice
+
+`kit notice` expects normalized transcript JSON as its machine input. You can pass a transcript JSON path, a slug from `transcripts/json/`, `latest`, or no input to use the newest transcript JSON.
+
+Common commands:
+
+```bash
+bin/kit notice --me "Cameron" latest
+bin/kit notice --me "Cameron" platform-sync
+bin/kit notice --json --me "Cameron" transcripts/json/platform-sync.json
+bin/kit notice --transcripts-dir transcripts --extracts-dir extracts platform-sync
+```
+
+Outputs are review artifacts, not trusted notes:
+
+```text
+extracts/json/<slug>.notice.json
+extracts/md/<slug>.notice.md
+```
+
+Each extracted item includes source citation details back to the transcript segment, including speaker, raw speaker, timestamp, and quote. Human review remains required; `remember` preserves possible/review-required labels in durable notes.
+
+## Remember
+
+`kit remember` expects notice extract JSON as its machine input. You can pass an extract JSON path, a slug from `extracts/json/`, `latest`, or no input to use the newest notice extract.
+
+Common commands:
+
+```bash
+bin/kit remember latest
+bin/kit remember platform-sync
+bin/kit remember --vault obsidian platform-sync
+bin/kit remember --json --dry-run latest
+```
+
+Default note targets:
+
+```text
+Inbox/Kit Inbox.md
+Commitments/Commitments.md
+Decisions/Decisions.md
+Open Loops/Open Loops.md
+```
+
+Remembered items are written as Kit-managed Markdown blocks keyed by stable notice item ids, for example `<!-- kit:item platform-sync-c001 -->`. Re-running `remember` updates existing Kit-managed blocks instead of blindly duplicating them. Keep manual edits outside those managed blocks.
 
 ## Development
 

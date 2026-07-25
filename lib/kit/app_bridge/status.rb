@@ -94,6 +94,8 @@ module Kit
           "stable_entrypoints" => [
             ["kit", "status", "--json"],
             ["kit", "listen", "status", "--json"],
+            ["kit", "notice", "--json"],
+            ["kit", "remember", "--json"],
             ["kit", "surface", "--json"],
             ["kit", "prepare", "--next", "--json"],
             ["kit", "brief", "--json"]

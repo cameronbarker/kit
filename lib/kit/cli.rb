@@ -5,8 +5,6 @@ require "json"
 module Kit
   class CLI
     PLANNED_COMMANDS = {
-      "notice" => "Extract commitments, decisions, risks, and open loops",
-      "remember" => "Write reviewed items into Obsidian/PARA",
       "surface" => "Show what needs attention now",
       "prepare" => "Build context packs for meetings and 1:1s",
       "brief" => "Draft leadership and stakeholder updates",
@@ -17,6 +15,8 @@ module Kit
 
     IMPLEMENTED_COMMANDS = {
       "listen" => "Record and transcribe conversations",
+      "notice" => "Extract commitments, decisions, and open loops",
+      "remember" => "Write notice items into durable notes",
       "notify" => "Send a simple local Kit notification",
       "status" => "Show machine-readable Kit app bridge status",
       "menubar" => "Start the macOS Kit menu bar helper"
@@ -50,6 +50,10 @@ module Kit
         run_menubar
       when "listen"
         Listen::CLI.run(@argv)
+      when "notice"
+        Notice::CLI.run(@argv)
+      when "remember"
+        Remember::CLI.run(@argv)
       when *PLANNED_COMMANDS.keys
         print_planned(command)
         2

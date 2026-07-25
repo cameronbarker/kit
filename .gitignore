@@ -1,6 +1,7 @@
 /Listen/
 recordings/
 transcripts/
+extracts/
 model/
 .cache/
 .venv/

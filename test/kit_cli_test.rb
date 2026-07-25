@@ -17,6 +17,7 @@ class KitCLITest < Minitest::Test
     assert_includes result[:stdout], "listen -> notice -> remember -> surface"
     assert_includes result[:stdout], "notify"
     assert_includes result[:stdout], "listen"
+    assert_includes result[:stdout], "notice"
     assert_includes result[:stdout], "menubar"
     assert_includes result[:stdout], "remember"
     assert_empty result[:stderr]
@@ -40,13 +41,20 @@ class KitCLITest < Minitest::Test
     assert_empty result[:stderr]
   end
 
-  def test_planned_command_is_intentional_stub
-    result = run_kit("notice")
+  def test_notice_is_implemented_command
+    result = run_kit("notice", "--help")
 
-    assert_equal 2, result[:status]
-    assert_empty result[:stdout]
-    assert_includes result[:stderr], "kit notice is planned but not implemented yet."
-    assert_includes result[:stderr], "Extract commitments, decisions, risks, and open loops"
+    assert_equal 0, result[:status]
+    assert_includes result[:stdout], "Usage: kit notice [options] [INPUT]"
+    assert_empty result[:stderr]
+  end
+
+  def test_remember_is_implemented_command
+    result = run_kit("remember", "--help")
+
+    assert_equal 0, result[:status]
+    assert_includes result[:stdout], "Usage: kit remember [options] [INPUT]"
+    assert_empty result[:stderr]
   end
 
   def test_notify_requires_message

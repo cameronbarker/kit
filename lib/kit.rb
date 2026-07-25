@@ -11,6 +11,8 @@ Kit::Env.load!
 
 require_relative "kit/notifications"
 require_relative "kit/listen"
+require_relative "kit/notice"
+require_relative "kit/remember"
 require_relative "kit/app_bridge"
 require_relative "kit/menubar"
 require_relative "kit/cli"

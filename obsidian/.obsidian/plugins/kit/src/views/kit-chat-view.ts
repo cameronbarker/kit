@@ -203,9 +203,13 @@ export class KitChatView extends ItemView {
       },
     });
     this.cancelBtn = actions.createEl("button", {
-      text: "Cancel",
-      cls: "kit-chat__cancel",
-      attr: { type: "button" },
+      text: "Stop",
+      cls: "mod-warning kit-chat__stop",
+      attr: {
+        type: "button",
+        title: "Stop the current Codex run",
+        "aria-label": "Stop the current Codex run",
+      },
     });
     this.sendBtn = actions.createEl("button", {
       text: "Send",
@@ -223,12 +227,17 @@ export class KitChatView extends ItemView {
       this.openDocumentMention();
     });
     this.registerDomEvent(this.cancelBtn, "click", () => {
-      this.abortController?.abort();
+      this.handleStop();
     });
     this.registerDomEvent(this.sendBtn, "click", () => {
       void this.handleSend();
     });
     this.registerDomEvent(this.inputEl, "keydown", (event: KeyboardEvent) => {
+      if (event.key === "Escape" && this.sending) {
+        event.preventDefault();
+        this.handleStop();
+        return;
+      }
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         void this.handleSend();
@@ -264,6 +273,7 @@ export class KitChatView extends ItemView {
     const canSend = !this.sending && this.codexReady === true;
     if (this.sendBtn) {
       this.sendBtn.disabled = !canSend;
+      this.sendBtn.toggleClass("is-hidden", this.sending);
     }
     if (this.cancelBtn) {
       this.cancelBtn.toggleClass("is-visible", this.sending);
@@ -272,6 +282,20 @@ export class KitChatView extends ItemView {
     if (this.modeAskBtn) this.modeAskBtn.disabled = this.sending;
     if (this.modeEditBtn) this.modeEditBtn.disabled = this.sending;
     if (this.inputEl) this.inputEl.disabled = this.sending;
+  }
+
+  private handleStop(): void {
+    if (!this.sending || !this.abortController) return;
+
+    const streaming = [...this.messages]
+      .reverse()
+      .find((m) => m.kind === "streaming");
+    if (streaming) {
+      streaming.statusLine = "Stopping…";
+      this.renderMessages();
+    }
+
+    this.abortController.abort();
   }
 
   private updateContextLabel(): void {
@@ -785,9 +809,9 @@ export class KitChatView extends ItemView {
     } catch (error) {
       this.finishTiming(streaming);
       if (this.isAbortError(error)) {
-        streaming.content = streaming.content || "Cancelled.";
+        streaming.content = streaming.content || "Stopped.";
         streaming.kind = "error";
-        streaming.statusLine = "Cancelled";
+        streaming.statusLine = "Stopped";
       } else {
         const message =
           error instanceof Error ? error.message : String(error);
@@ -874,9 +898,9 @@ export class KitChatView extends ItemView {
     } catch (error) {
       this.finishTiming(streaming);
       if (this.isAbortError(error)) {
-        streaming.content = streaming.content || "Apply cancelled.";
+        streaming.content = streaming.content || "Apply stopped.";
         streaming.kind = "error";
-        streaming.statusLine = "Cancelled";
+        streaming.statusLine = "Stopped";
       } else {
         const message =
           error instanceof Error ? error.message : String(error);

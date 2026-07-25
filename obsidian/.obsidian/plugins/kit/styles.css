@@ -287,13 +287,17 @@
   font-weight: 650;
 }
 
-.kit-chat__cancel {
+.kit-chat__stop {
   display: none;
   margin: 0;
 }
 
-.kit-chat__cancel.is-visible {
+.kit-chat__stop.is-visible {
   display: inline-flex;
+}
+
+.kit-chat__send.is-hidden {
+  display: none;
 }
 
 .kit-chat__status {

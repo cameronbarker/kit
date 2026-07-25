@@ -285,6 +285,15 @@ export function runCodexExec(options: RunCodexExecOptions): Promise<void> {
       } catch {
         // ignore
       }
+      // Escalating kill if Codex ignores SIGTERM.
+      setTimeout(() => {
+        if (settled) return;
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // ignore
+        }
+      }, 1500);
     };
 
     if (options.signal) {

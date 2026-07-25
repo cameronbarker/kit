@@ -5,7 +5,6 @@ require "json"
 module Kit
   class CLI
     PLANNED_COMMANDS = {
-      "surface" => "Show what needs attention now",
       "prepare" => "Build context packs for meetings and 1:1s",
       "brief" => "Draft leadership and stakeholder updates",
       "followup" => "Track promises, waiting-on items, and stale loops",
@@ -17,6 +16,7 @@ module Kit
       "listen" => "Record and transcribe conversations",
       "notice" => "Extract commitments, decisions, and open loops",
       "remember" => "Write notice items into durable notes",
+      "surface" => "Show what needs attention now",
       "notify" => "Send a simple local Kit notification",
       "status" => "Show machine-readable Kit app bridge status",
       "menubar" => "Start the macOS Kit menu bar helper"
@@ -54,6 +54,8 @@ module Kit
         Notice::CLI.run(@argv)
       when "remember"
         Remember::CLI.run(@argv)
+      when "surface"
+        Surface::CLI.run(@argv)
       when *PLANNED_COMMANDS.keys
         print_planned(command)
         2

@@ -57,6 +57,14 @@ class KitCLITest < Minitest::Test
     assert_empty result[:stderr]
   end
 
+  def test_surface_is_implemented_command
+    result = run_kit("surface", "--help")
+
+    assert_equal 0, result[:status]
+    assert_includes result[:stdout], "Usage: kit surface [options]"
+    assert_empty result[:stderr]
+  end
+
   def test_notify_requires_message
     result = run_kit("notify")
 

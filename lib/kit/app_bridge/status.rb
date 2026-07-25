@@ -10,7 +10,7 @@ module Kit
         "open_loops" => {
           "label" => "Today's open loops",
           "command" => ["kit", "surface", "--json"],
-          "implemented" => false
+          "implemented" => true
         },
         "overdue_commitments" => {
           "label" => "Overdue commitments",
@@ -20,7 +20,7 @@ module Kit
         "today_surface" => {
           "label" => "Open today's surface",
           "command" => ["kit", "surface"],
-          "implemented" => false
+          "implemented" => true
         },
         "listen" => {
           "label" => "Start listening",

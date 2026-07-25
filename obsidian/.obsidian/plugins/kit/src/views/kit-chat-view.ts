@@ -637,49 +637,6 @@ export class KitChatView extends ItemView {
       });
     }
 
-    if (this.canReplyTo(message)) {
-      const replyBtn = header.createEl("button", {
-        cls: "kit-chat__reply",
-        attr: {
-          type: "button",
-          title: "Reply in thread",
-          "aria-label": "Reply in thread",
-        },
-      });
-      setIcon(replyBtn, "message-square");
-      this.registerDomEvent(replyBtn, "click", () => {
-        this.openThread(message.id);
-      });
-    }
-
-    if (message.role === "user" && !this.sending && !editing) {
-      const editBtn = header.createEl("button", {
-        cls: "kit-chat__edit",
-        attr: {
-          type: "button",
-          title: "Edit and resend from here",
-          "aria-label": "Edit and resend from here",
-        },
-      });
-      setIcon(editBtn, "pencil");
-      this.registerDomEvent(editBtn, "click", () => {
-        this.beginEditMessage(message.id);
-      });
-    }
-
-    const copyBtn = header.createEl("button", {
-      cls: "kit-chat__copy",
-      attr: {
-        type: "button",
-        title: "Copy message",
-        "aria-label": "Copy message",
-      },
-    });
-    setIcon(copyBtn, "copy");
-    this.registerDomEvent(copyBtn, "click", () => {
-      void this.copyMessage(message.content);
-    });
-
     if (collapsed) {
       if (!this.inThread()) {
         const thread = this.threads.get(message.id);
@@ -729,6 +686,48 @@ export class KitChatView extends ItemView {
       bubble.createEl("p", {
         text: message.content || (message.kind === "streaming" ? "…" : ""),
         cls: "kit-chat__content",
+      });
+
+      const footer = bubble.createDiv({ cls: "kit-chat__bubble-footer" });
+      if (this.canReplyTo(message)) {
+        const replyBtn = footer.createEl("button", {
+          cls: "kit-chat__reply",
+          attr: {
+            type: "button",
+            title: "Reply in thread",
+            "aria-label": "Reply in thread",
+          },
+        });
+        setIcon(replyBtn, "message-square");
+        this.registerDomEvent(replyBtn, "click", () => {
+          this.openThread(message.id);
+        });
+      }
+      if (message.role === "user" && !this.sending) {
+        const editBtn = footer.createEl("button", {
+          cls: "kit-chat__edit",
+          attr: {
+            type: "button",
+            title: "Edit and resend from here",
+            "aria-label": "Edit and resend from here",
+          },
+        });
+        setIcon(editBtn, "pencil");
+        this.registerDomEvent(editBtn, "click", () => {
+          this.beginEditMessage(message.id);
+        });
+      }
+      const copyBtn = footer.createEl("button", {
+        cls: "kit-chat__copy",
+        attr: {
+          type: "button",
+          title: "Copy message",
+          "aria-label": "Copy message",
+        },
+      });
+      setIcon(copyBtn, "copy");
+      this.registerDomEvent(copyBtn, "click", () => {
+        void this.copyMessage(message.content);
       });
     }
 

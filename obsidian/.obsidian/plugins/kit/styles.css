@@ -171,6 +171,14 @@
   padding-bottom: 0.45rem;
 }
 
+.kit-chat__bubble-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.15rem;
+  margin-top: 0.2rem;
+}
+
 .kit-chat__copy,
 .kit-chat__edit,
 .kit-chat__reply {

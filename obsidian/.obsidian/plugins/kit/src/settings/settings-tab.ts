@@ -54,5 +54,62 @@ export class KitSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
+
+    new Setting(containerEl)
+      .setName("Chat retrieval (qmd)")
+      .setDesc(
+        "Before each Ask/Edit turn, search the local qmd index and pass related notes into Codex.",
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.chatRetrievalEnabled)
+          .onChange(async (value) => {
+            this.plugin.settings.chatRetrievalEnabled = value;
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("qmd binary")
+      .setDesc(
+        "Absolute path to qmd (recommended). Leave blank to auto-detect. Obsidian often cannot see your shell PATH.",
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("qmd")
+          .setValue(this.plugin.settings.qmdBinary)
+          .onChange(async (value) => {
+            this.plugin.settings.qmdBinary = value.trim();
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("qmd index")
+      .setDesc("Index name passed to qmd --index (default: kit).")
+      .addText((text) =>
+        text
+          .setPlaceholder("kit")
+          .setValue(this.plugin.settings.qmdIndex)
+          .onChange(async (value) => {
+            this.plugin.settings.qmdIndex = value.trim() || "kit";
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Retrieval hit limit")
+      .setDesc("Maximum qmd hits to inject into each chat turn.")
+      .addText((text) =>
+        text
+          .setPlaceholder("5")
+          .setValue(String(this.plugin.settings.chatRetrievalLimit))
+          .onChange(async (value) => {
+            const parsed = Number.parseInt(value.trim(), 10);
+            this.plugin.settings.chatRetrievalLimit =
+              Number.isFinite(parsed) && parsed > 0 ? parsed : 5;
+            await this.plugin.saveSettings();
+          }),
+      );
   }
 }

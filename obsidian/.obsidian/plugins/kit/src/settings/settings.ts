@@ -6,4 +6,8 @@ export const DEFAULT_SETTINGS: KitSettings = {
   showHelloOnOpen: false,
   codexBinary: "",
   defaultChatMode: "ask",
+  qmdBinary: "",
+  qmdIndex: "kit",
+  chatRetrievalEnabled: true,
+  chatRetrievalLimit: 5,
 };

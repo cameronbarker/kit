@@ -1322,7 +1322,9 @@ export class KitChatView extends ItemView {
     const startedAt = Date.now();
     const streaming = createChatMessage("assistant", "", {
       kind: "streaming",
-      statusLine: "Starting Codex…",
+      statusLine: this.plugin.settings.chatRetrievalEnabled
+        ? "Searching Kit index…"
+        : "Starting Codex…",
       mode: options.mode,
       startedAt,
     });
@@ -1349,6 +1351,12 @@ export class KitChatView extends ItemView {
         binary: this.plugin.settings.codexBinary,
         signal: this.abortController.signal,
         threadContext: this.buildThreadContext(),
+        retrieval: {
+          enabled: this.plugin.settings.chatRetrievalEnabled,
+          binary: this.plugin.settings.qmdBinary,
+          index: this.plugin.settings.qmdIndex,
+          limit: this.plugin.settings.chatRetrievalLimit,
+        },
         onEvent: (event) => this.applyStreamEvent(streaming, event),
       });
 

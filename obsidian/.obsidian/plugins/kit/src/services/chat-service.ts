@@ -9,6 +9,11 @@ import {
   runCodexExec,
   type CodexStreamEvent,
 } from "./codex-exec";
+import {
+  formatRetrievalHits,
+  retrieveQmd,
+  type QmdHit,
+} from "./qmd-retrieval";
 
 let messageSeq = 0;
 
@@ -73,6 +78,13 @@ export interface ChatThreadContext {
   mainExcerpt?: ChatMessage[];
 }
 
+export interface ChatRetrievalOptions {
+  enabled: boolean;
+  binary: string;
+  index: string;
+  limit: number;
+}
+
 export interface ChatTurnInput {
   mode: ChatMode;
   userText: string;
@@ -85,12 +97,15 @@ export interface ChatTurnInput {
   signal?: AbortSignal;
   onEvent: (event: CodexStreamEvent) => void;
   threadContext?: ChatThreadContext;
+  retrieval?: ChatRetrievalOptions;
 }
 
 export interface ChatTurnResult {
   threadId: string | null;
   finalText: string;
   kind: ChatMessageKind;
+  retrievalHitCount?: number;
+  retrievalWarning?: string;
 }
 
 export interface ApplyPlanInput {
@@ -140,7 +155,7 @@ function formatThreadContext(ctx: ChatThreadContext): string {
   return lines.join("\n\n");
 }
 
-function buildPrompt(input: ChatTurnInput): string {
+function buildPrompt(input: ChatTurnInput, retrievalHits: QmdHit[]): string {
   const recent = input.history
     .filter((m) => m.role === "user" || m.role === "assistant")
     .slice(-8)
@@ -154,6 +169,7 @@ function buildPrompt(input: ChatTurnInput): string {
     input.threadContext ? formatThreadContext(input.threadContext) : "",
     formatActiveTab(input.activeTab),
     formatMentions(input.mentions, input.vaultPath),
+    formatRetrievalHits(retrievalHits),
     recent
       ? `${input.threadContext ? "Thread" : "Recent"} chat:\n${recent}`
       : "",
@@ -170,11 +186,39 @@ export class ChatService {
   async startTurn(input: ChatTurnInput): Promise<ChatTurnResult> {
     let threadId = input.threadId;
     let finalText = "";
+    let retrievalHits: QmdHit[] = [];
+    let retrievalWarning: string | undefined;
+
+    const retrieval = input.retrieval;
+    if (retrieval?.enabled) {
+      input.onEvent({ type: "status", message: "Searching Kit index…" });
+      const result = await retrieveQmd({
+        query: input.userText,
+        vaultPath: input.vaultPath,
+        binary: retrieval.binary,
+        index: retrieval.index,
+        limit: retrieval.limit,
+        signal: input.signal,
+      });
+      retrievalHits = result.hits;
+      retrievalWarning = result.warning;
+      if (result.available && result.hits.length > 0) {
+        input.onEvent({
+          type: "status",
+          message: `Found ${result.hits.length} related note${result.hits.length === 1 ? "" : "s"}`,
+        });
+      } else if (!result.available && result.warning) {
+        input.onEvent({
+          type: "status",
+          message: "Kit index unavailable — continuing without retrieval",
+        });
+      }
+    }
 
     await runCodexExec({
       binary: input.binary,
       vaultPath: input.vaultPath,
-      prompt: buildPrompt(input),
+      prompt: buildPrompt(input, retrievalHits),
       sandbox: "read-only",
       threadId,
       signal: input.signal,
@@ -202,6 +246,8 @@ export class ChatService {
       threadId,
       finalText: finalText.trim(),
       kind: input.mode === "edit" ? "proposal" : "normal",
+      retrievalHitCount: retrievalHits.length,
+      retrievalWarning,
     };
   }
 

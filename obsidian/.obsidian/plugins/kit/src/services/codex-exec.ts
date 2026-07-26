@@ -49,7 +49,7 @@ function expandUserPath(path: string): string {
   return path;
 }
 
-function augmentedEnv(): NodeJS.ProcessEnv {
+export function augmentedEnv(): NodeJS.ProcessEnv {
   const existing = process.env.PATH ?? "";
   const merged = [
     ...candidatePathDirs(),

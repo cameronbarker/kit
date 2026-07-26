@@ -14,6 +14,13 @@ export interface KitSettings {
   /** Empty means resolve `codex` on PATH. */
   codexBinary: string;
   defaultChatMode: ChatMode;
+  /** Empty means resolve `qmd` on PATH. */
+  qmdBinary: string;
+  /** qmd index name (matches Ruby Kit::Qmd::DEFAULT_INDEX). */
+  qmdIndex: string;
+  /** Auto-run qmd query before each Ask/Edit turn. */
+  chatRetrievalEnabled: boolean;
+  chatRetrievalLimit: number;
 }
 
 export type ChatRole = "user" | "assistant" | "system";

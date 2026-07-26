@@ -4,6 +4,7 @@ require "open3"
 require "rbconfig"
 require "json"
 require "minitest/autorun"
+require "tmpdir"
 
 class KitCLITest < Minitest::Test
   ROOT = File.expand_path("..", __dir__)
@@ -162,6 +163,8 @@ class KitCLITest < Minitest::Test
 
     assert_equal 0, result[:status]
     assert_includes result[:stdout], "Usage: kit menubar [start] [--foreground]"
+    assert_includes result[:stdout], "kit menubar stop"
+    assert_includes result[:stdout], "kit menubar restart"
     assert_empty result[:stderr]
   end
 
@@ -178,7 +181,78 @@ class KitCLITest < Minitest::Test
 
     assert_equal 1, result[:status]
     assert_empty result[:stdout]
-    assert_includes result[:stderr], "Error: usage: kit menubar [start] [--foreground]"
+    assert_includes result[:stderr], "Error: usage: kit menubar [start|stop|restart] [--foreground]"
+  end
+
+  def test_menubar_stop_reports_not_running_without_pid_file
+    Dir.mktmpdir do |dir|
+      result = run_kit("menubar", "stop", env: { "KIT_MENUBAR_PID_FILE" => File.join(dir, "kit-menubar.pid") })
+
+      assert_equal 0, result[:status]
+      assert_equal "Kit menu bar is not running\n", result[:stdout]
+      assert_empty result[:stderr]
+    end
+  end
+
+  def test_menubar_stop_rejects_foreground
+    result = run_kit("menubar", "stop", "--foreground")
+
+    assert_equal 1, result[:status]
+    assert_empty result[:stdout]
+    assert_includes result[:stderr], "Error: usage: kit menubar [start|stop|restart] [--foreground]"
+  end
+
+  def test_menubar_restart_stops_then_starts
+    Dir.mktmpdir do |dir|
+      pid_file = File.join(dir, "kit-menubar.pid")
+      pid = Process.spawn(RUBY, "-e", "sleep")
+      File.write(pid_file, "#{pid}\n")
+
+      begin
+        result = run_kit(
+          "menubar",
+          "restart",
+          env: {
+            "KIT_MENUBAR_PID_FILE" => pid_file,
+            "KIT_MENUBAR_DRY_RUN" => "1"
+          }
+        )
+
+        assert_equal 0, result[:status]
+        assert_includes result[:stdout], "Stopped Kit menu bar (pid #{pid})"
+        assert_includes result[:stdout], "swift run KitMenuBar"
+        assert_empty result[:stderr]
+        refute File.exist?(pid_file)
+      ensure
+        cleanup_process(pid)
+      end
+    end
+  end
+
+  def test_menubar_restart_starts_when_not_running
+    Dir.mktmpdir do |dir|
+      result = run_kit(
+        "menubar",
+        "restart",
+        env: {
+          "KIT_MENUBAR_PID_FILE" => File.join(dir, "kit-menubar.pid"),
+          "KIT_MENUBAR_DRY_RUN" => "1"
+        }
+      )
+
+      assert_equal 0, result[:status]
+      assert_includes result[:stdout], "Kit menu bar is not running"
+      assert_includes result[:stdout], "swift run KitMenuBar"
+      assert_empty result[:stderr]
+    end
+  end
+
+  def test_menubar_restart_rejects_foreground
+    result = run_kit("menubar", "restart", "--foreground")
+
+    assert_equal 1, result[:status]
+    assert_empty result[:stdout]
+    assert_includes result[:stderr], "Error: usage: kit menubar [start|stop|restart] [--foreground]"
   end
 
   def test_listen_is_implemented_subcommand
@@ -203,5 +277,19 @@ class KitCLITest < Minitest::Test
   def run_kit(*args, env: {})
     stdout, stderr, status = Open3.capture3(env, RUBY, File.join(ROOT, "bin/kit"), *args, chdir: ROOT)
     { stdout: stdout, stderr: stderr, status: status.exitstatus }
+  end
+
+  def cleanup_process(pid)
+    begin
+      Process.kill("TERM", pid)
+    rescue Errno::ESRCH
+      nil
+    end
+
+    begin
+      Process.wait(pid)
+    rescue Errno::ECHILD
+      nil
+    end
   end
 end

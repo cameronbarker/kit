@@ -18,7 +18,7 @@ module Kit
       "qmd" => "Manage/search the local qmd index",
       "notify" => "Send a simple local Kit notification",
       "status" => "Show machine-readable Kit app bridge status",
-      "menubar" => "Start the macOS Kit menu bar helper"
+      "menubar" => "Start or stop the macOS Kit menu bar helper"
     }.freeze
 
     def self.run(argv)
@@ -156,21 +156,57 @@ module Kit
     end
 
     def run_menubar
+      action = "start"
       foreground = false
       @argv.each do |arg|
         case arg
-        when "start", "help", "-h", "--help"
-          next if arg == "start"
+        when "start", "stop", "restart", "help", "-h", "--help"
+          if arg == "start" || arg == "stop" || arg == "restart"
+            action = arg
+            next
+          end
 
           print_menubar_help
           return 0
         when "--foreground"
           foreground = true
         else
-          raise Error, "usage: kit menubar [start] [--foreground]"
+          raise Error, menubar_usage
         end
       end
 
+      if action == "stop" || action == "restart"
+        raise Error, menubar_usage if foreground
+
+        status = stop_menubar
+        return status unless status.zero?
+        return start_menubar(foreground: false) if action == "restart"
+
+        return 0
+      end
+
+      start_menubar(foreground: foreground)
+    rescue Error => e
+      @err.puts "Error: #{e.message}"
+      1
+    end
+
+    def stop_menubar
+      result = MenuBar.stop
+      unless result.success?
+        @err.puts "Error: #{result.error}"
+        return 1
+      end
+
+      if result.stopped
+        @out.puts "Stopped Kit menu bar (pid #{result.pid})"
+      else
+        @out.puts "Kit menu bar is not running"
+      end
+      0
+    end
+
+    def start_menubar(foreground:)
       result = MenuBar.start(foreground: foreground)
       unless result.success?
         @err.puts "Error: #{result.error}"
@@ -190,20 +226,23 @@ module Kit
 
       @out.puts "Started Kit menu bar (pid #{result.pid})"
       0
-    rescue Error => e
-      @err.puts "Error: #{e.message}"
-      1
     end
 
     def print_menubar_help
       @out.puts <<~HELP
         Usage: kit menubar [start] [--foreground]
+               kit menubar stop
+               kit menubar restart
 
-        Start the thin macOS Kit menu bar helper from mac/menubar.
+        Start, stop, or restart the thin macOS Kit menu bar helper from mac/menubar.
 
         Options:
           --foreground    Keep the CLI attached to the menu bar process
       HELP
+    end
+
+    def menubar_usage
+      "usage: kit menubar [start|stop|restart] [--foreground]"
     end
 
     def notify_dry_run?

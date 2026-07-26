@@ -2,6 +2,7 @@
 
 require "open3"
 require "rbconfig"
+require "tmpdir"
 
 module Kit
   module MenuBar
@@ -10,6 +11,7 @@ module Kit
     EXECUTABLE_NAME = "KitMenuBar"
     KIT_CLI = File.join(ROOT, "bin", "kit")
     ICON_PATH = File.join(ROOT, "assets", "Kit-Logo-2424r.png")
+    PID_FILE = ENV.fetch("KIT_MENUBAR_PID_FILE", File.join(Dir.tmpdir, "kit-menubar.pid"))
 
     LaunchResult = Struct.new(
       :success?,
@@ -23,6 +25,15 @@ module Kit
       keyword_init: true
     )
 
+    StopResult = Struct.new(
+      :success?,
+      :pid,
+      :pid_file,
+      :stopped,
+      :error,
+      keyword_init: true
+    )
+
     class Launcher
       def initialize(
         package_dir: PACKAGE_DIR,
@@ -30,6 +41,7 @@ module Kit
         swift: "swift",
         spawner: nil,
         which: nil,
+        pid_file: PID_FILE,
         dry_run: ENV.fetch("KIT_MENUBAR_DRY_RUN", "") == "1"
       )
         @package_dir = File.expand_path(package_dir)
@@ -37,6 +49,7 @@ module Kit
         @swift = swift
         @spawner = spawner || method(:default_spawn)
         @which = which || method(:default_which)
+        @pid_file = pid_file
         @dry_run = dry_run
       end
 
@@ -51,6 +64,7 @@ module Kit
           "KIT_MENUBAR_ICON" => ICON_PATH
         )
         pid = @spawner.call(env, command, @package_dir, foreground)
+        write_pid(pid) unless foreground
         LaunchResult.new(
           success?: true,
           pid: pid,
@@ -132,10 +146,93 @@ module Kit
           pid
         end
       end
+
+      def write_pid(pid)
+        File.write(@pid_file, "#{pid}\n")
+      end
+    end
+
+    class Stopper
+      def initialize(
+        pid_file: PID_FILE,
+        killer: nil,
+        process_exists: nil
+      )
+        @pid_file = pid_file
+        @killer = killer || method(:default_kill)
+        @process_exists = process_exists || method(:default_process_exists?)
+      end
+
+      def stop
+        pid = read_pid
+        return success(pid: nil, stopped: false) unless pid
+
+        unless @process_exists.call(pid)
+          remove_pid_file
+          return success(pid: pid, stopped: false)
+        end
+
+        @killer.call(pid)
+        remove_pid_file
+        success(pid: pid, stopped: true)
+      rescue Error => e
+        StopResult.new(
+          success?: false,
+          pid: nil,
+          pid_file: @pid_file,
+          stopped: false,
+          error: e.message
+        )
+      end
+
+      private
+
+      def read_pid
+        return nil unless File.file?(@pid_file)
+
+        raw = File.read(@pid_file).strip
+        return Integer(raw, exception: false) if raw.match?(/\A\d+\z/)
+
+        remove_pid_file
+        raise Error, "invalid menu bar pid file at #{@pid_file}"
+      end
+
+      def remove_pid_file
+        File.delete(@pid_file) if File.file?(@pid_file)
+      end
+
+      def default_process_exists?(pid)
+        Process.kill(0, pid)
+        true
+      rescue Errno::ESRCH
+        false
+      rescue Errno::EPERM
+        true
+      end
+
+      def default_kill(pid)
+        Process.kill("TERM", -pid)
+      rescue Errno::ESRCH
+        Process.kill("TERM", pid)
+      end
+
+      def success(pid:, stopped:)
+        StopResult.new(
+          success?: true,
+          pid: pid,
+          pid_file: @pid_file,
+          stopped: stopped,
+          error: nil
+        )
+      end
     end
 
     def self.start(foreground: false, launcher: Launcher.new)
       launcher.start(foreground: foreground)
+    end
+
+    def self.stop(stopper: Stopper.new)
+      stopper.stop
     end
   end
 end

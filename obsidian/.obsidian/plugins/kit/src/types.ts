@@ -33,6 +33,8 @@ export interface ChatMessage {
   durationMs?: number;
   /** Vault files attached via @ when this user message was sent. */
   mentions?: ChatDocumentRef[];
+  /** Apply-undo checkpoint id when this assistant message was an Apply. */
+  checkpointId?: string;
 }
 
 /** Side thread rooted at a main-lane parent message. */
@@ -43,6 +45,20 @@ export interface ChatThread {
   codexThreadId: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/** Persisted main-lane chat session (vault file under kit/chats/). */
+export interface ChatConversation {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  mainMessages: ChatMessage[];
+  mainCodexThreadId: string | null;
+  /** Side threads serialized as an array (Map in memory). */
+  threads: ChatThread[];
+  /** Ordered Apply checkpoint ids; last entry is the undo tip. */
+  applyCheckpoints?: string[];
 }
 
 /** Snapshot of the main-area tab (not the sidebar). */

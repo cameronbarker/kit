@@ -3,6 +3,8 @@ import { registerCommands } from "./commands";
 import { DEFAULT_SETTINGS, type KitSettings } from "./settings/settings";
 import { KitSettingTab } from "./settings/settings-tab";
 import { ActiveTabService } from "./services/active-tab-service";
+import { ApplyCheckpointService } from "./services/apply-checkpoint-service";
+import { ChatHistoryService } from "./services/chat-history-service";
 import { ChatService } from "./services/chat-service";
 import { HelloService } from "./services/hello-service";
 import { KIT_LOGO_ICON_ID, registerKitIcons } from "./utils/icons";
@@ -12,6 +14,8 @@ export default class KitPlugin extends Plugin {
   settings!: KitSettings;
   helloService!: HelloService;
   chatService!: ChatService;
+  chatHistoryService!: ChatHistoryService;
+  applyCheckpointService!: ApplyCheckpointService;
   activeTabService!: ActiveTabService;
 
   async onload(): Promise<void> {
@@ -19,6 +23,8 @@ export default class KitPlugin extends Plugin {
 
     this.helloService = new HelloService();
     this.chatService = new ChatService();
+    this.chatHistoryService = new ChatHistoryService(this.app);
+    this.applyCheckpointService = new ApplyCheckpointService(this.app);
     this.activeTabService = new ActiveTabService(this.app);
 
     this.registerEvent(

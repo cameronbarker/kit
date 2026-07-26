@@ -49,6 +49,62 @@
   box-sizing: border-box;
 }
 
+.kit-chat__session-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.5rem;
+}
+
+.kit-chat__session-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+}
+
+.kit-chat__session-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex-shrink: 0;
+}
+
+.kit-chat__session-btn {
+  margin: 0;
+  padding: 0.2rem;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+.kit-chat__session-btn:hover {
+  color: var(--text-normal);
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.kit-chat__session-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.kit-chat__session-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
 .kit-chat__title {
   margin: 0;
   font-size: 1.05rem;
@@ -452,6 +508,10 @@
   margin: 0;
 }
 
+.kit-chat__undo {
+  margin: 0;
+}
+
 .kit-chat__proposal-hint {
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
@@ -545,4 +605,139 @@
 .kit-chat__reply-chip:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.kit-chat-history-modal {
+  width: min(42rem, 92vw);
+}
+
+.kit-chat-history-modal .modal-content {
+  padding-top: 0.35rem;
+}
+
+.kit-chat-history-modal__empty {
+  margin: 0.5rem 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.kit-chat-history-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-height: min(70vh, 36rem);
+  overflow-y: auto;
+}
+
+.kit-chat-history-modal__row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.15rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+}
+
+.kit-chat-history-modal__open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.65rem 0.7rem;
+  border: none;
+  border-radius: var(--radius-s, 4px);
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kit-chat-history-modal__open:hover {
+  background: var(--background-modifier-hover);
+  box-shadow: none;
+}
+
+.kit-chat-history-modal__title {
+  width: 100%;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  font-weight: 650;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.kit-chat-history-modal__snippet {
+  display: grid;
+  grid-template-columns: 2.75rem 1fr;
+  gap: 0.35rem;
+  width: 100%;
+  align-items: start;
+}
+
+.kit-chat-history-modal__snippet-label {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding-top: 0.05rem;
+}
+
+.kit-chat-history-modal__snippet-text {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.kit-chat-history-modal__mentions {
+  width: 100%;
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kit-chat-history-modal__meta {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+
+.kit-chat-history-modal__delete {
+  margin: 0;
+  padding: 0.45rem;
+  border: none;
+  border-radius: var(--radius-s, 4px);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.kit-chat-history-modal__delete:hover {
+  color: var(--text-error, var(--text-accent));
+  background: var(--background-modifier-hover);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.kit-chat-history-modal__delete svg {
+  width: 16px;
+  height: 16px;
 }

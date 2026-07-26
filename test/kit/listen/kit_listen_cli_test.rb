@@ -52,6 +52,30 @@ class Kit::ListenCLITest < Minitest::Test
     assert File.file?(File.join(@transcripts_dir, "md", "platform-sync.md"))
   end
 
+  def test_transcribe_command_emits_json
+    status, stdout, stderr = capture_json_cli(
+      "transcribe",
+      "--mock",
+      "--json",
+      "--transcripts-dir", @transcripts_dir,
+      @input
+    )
+    assert_equal 0, status, stderr
+
+    payload = parse_json_stdout(stdout)
+    assert_equal true, payload["ok"]
+    assert_equal "transcribe", payload["action"]
+    assert_equal @input, payload["input"]
+    assert_equal File.join(@transcripts_dir, "raw", "platform-sync.raw.json"), payload["raw_json"]
+    assert_equal File.join(@transcripts_dir, "json", "platform-sync.json"), payload["transcript_json"]
+    assert_equal File.join(@transcripts_dir, "md", "platform-sync.md"), payload["transcript_md"]
+    assert_equal File.join(@transcripts_dir, "maps", "platform-sync.speaker-map.yml"), payload["speaker_map"]
+    assert File.file?(payload["raw_json"])
+    assert File.file?(payload["transcript_json"])
+    assert File.file?(payload["transcript_md"])
+    assert File.file?(payload["speaker_map"])
+  end
+
   def test_speakers_command_shows_map_and_samples
     assert_equal 0, Kit::Listen::CLI.run(
       [

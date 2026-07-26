@@ -12,14 +12,28 @@ import { createChatMessage } from "../services/chat-service";
 import type { CodexStreamEvent } from "../services/codex-exec";
 import { checkCodexBinary } from "../services/codex-exec";
 import type {
+  ChatConversation,
   ChatDocumentRef,
   ChatMessage,
   ChatMode,
   ChatThread,
 } from "../types";
+import { ChatHistoryModal } from "../ui/chat-history-modal";
 import { DocumentMentionModal } from "../ui/document-mention-modal";
 
 let threadSeq = 0;
+
+const WELCOME_TEXT =
+  "Hi — this is Kit chat. Choose Ask or Edit, type @ to attach a vault document.";
+
+function conversationTitleFromMessages(messages: ChatMessage[]): string {
+  const firstUser = messages.find(
+    (m) => m.role === "user" && m.content.trim().length > 0,
+  );
+  if (!firstUser) return "New chat";
+  const text = firstUser.content.trim().replace(/\s+/g, " ");
+  return text.length > 60 ? `${text.slice(0, 57)}…` : text;
+}
 
 export class KitChatView extends ItemView {
   plugin: KitPlugin;
@@ -27,10 +41,18 @@ export class KitChatView extends ItemView {
   private mainCodexThreadId: string | null = null;
   private threads = new Map<string, ChatThread>();
   private activeThreadParentId: string | null = null;
+  private conversationId: string;
+  private conversationCreatedAt: number;
+  private conversationTitle = "New chat";
+  private applyCheckpoints: string[] = [];
   private mentions: ChatDocumentRef[] = [];
   private mode: ChatMode = "ask";
   private listEl: HTMLElement | null = null;
   private mentionsEl: HTMLElement | null = null;
+  private sessionHeaderEl: HTMLElement | null = null;
+  private sessionTitleEl: HTMLElement | null = null;
+  private historyBtn: HTMLButtonElement | null = null;
+  private newChatBtn: HTMLButtonElement | null = null;
   private threadChromeEl: HTMLElement | null = null;
   private inputEl: HTMLTextAreaElement | null = null;
   private modeAskBtn: HTMLButtonElement | null = null;
@@ -53,12 +75,10 @@ export class KitChatView extends ItemView {
     super(leaf);
     this.plugin = plugin;
     this.mode = plugin.settings.defaultChatMode;
-    this.mainMessages = [
-      createChatMessage(
-        "assistant",
-        "Hi — this is Kit chat. Choose Ask or Edit, type @ to attach a vault document.",
-      ),
-    ];
+    const now = Date.now();
+    this.conversationId = `chat-${now}`;
+    this.conversationCreatedAt = now;
+    this.mainMessages = [createChatMessage("assistant", WELCOME_TEXT)];
   }
 
   getViewType(): string {
@@ -86,9 +106,14 @@ export class KitChatView extends ItemView {
   async onClose(): Promise<void> {
     this.stopElapsedTimer();
     this.abortController?.abort();
+    await this.persistActiveConversation();
     this.contentEl.empty();
     this.listEl = null;
     this.mentionsEl = null;
+    this.sessionHeaderEl = null;
+    this.sessionTitleEl = null;
+    this.historyBtn = null;
+    this.newChatBtn = null;
     this.threadChromeEl = null;
     this.inputEl = null;
     this.modeAskBtn = null;
@@ -244,6 +269,39 @@ export class KitChatView extends ItemView {
       });
       return;
     }
+
+    this.sessionHeaderEl = root.createDiv({ cls: "kit-chat__session-header" });
+    this.sessionTitleEl = this.sessionHeaderEl.createEl("span", {
+      cls: "kit-chat__session-title",
+    });
+    const sessionActions = this.sessionHeaderEl.createDiv({
+      cls: "kit-chat__session-actions",
+    });
+    this.historyBtn = sessionActions.createEl("button", {
+      cls: "kit-chat__session-btn",
+      attr: {
+        type: "button",
+        title: "Chat history",
+        "aria-label": "Chat history",
+      },
+    });
+    setIcon(this.historyBtn, "history");
+    this.newChatBtn = sessionActions.createEl("button", {
+      cls: "kit-chat__session-btn",
+      attr: {
+        type: "button",
+        title: "New chat",
+        "aria-label": "New chat",
+      },
+    });
+    setIcon(this.newChatBtn, "plus");
+    this.registerDomEvent(this.historyBtn, "click", () => {
+      this.openHistoryModal();
+    });
+    this.registerDomEvent(this.newChatBtn, "click", () => {
+      void this.startNewChat();
+    });
+    this.updateSessionHeader();
 
     this.threadChromeEl = root.createDiv({ cls: "kit-chat__thread-chrome" });
     this.updateThreadChrome();
@@ -424,7 +482,150 @@ export class KitChatView extends ItemView {
     if (this.modeAskBtn) this.modeAskBtn.disabled = this.sending;
     if (this.modeEditBtn) this.modeEditBtn.disabled = this.sending;
     if (this.inputEl) this.inputEl.disabled = this.sending;
+    if (this.historyBtn) this.historyBtn.disabled = this.sending;
+    if (this.newChatBtn) this.newChatBtn.disabled = this.sending;
     this.updateThreadChrome();
+  }
+
+  private updateSessionHeader(): void {
+    if (this.sessionTitleEl) {
+      this.sessionTitleEl.setText(this.conversationTitle);
+      this.sessionTitleEl.setAttr("title", this.conversationTitle);
+    }
+  }
+
+  private hasPersistableContent(): boolean {
+    return this.mainMessages.some(
+      (m) => m.role === "user" && m.content.trim().length > 0,
+    );
+  }
+
+  private snapshotConversation(): ChatConversation {
+    const title = conversationTitleFromMessages(this.mainMessages);
+    this.conversationTitle = title;
+    return {
+      id: this.conversationId,
+      title,
+      createdAt: this.conversationCreatedAt,
+      updatedAt: Date.now(),
+      mainMessages: this.mainMessages,
+      mainCodexThreadId: this.mainCodexThreadId,
+      threads: Array.from(this.threads.values()),
+      applyCheckpoints: [...this.applyCheckpoints],
+    };
+  }
+
+  private hydrateConversation(conversation: ChatConversation): void {
+    this.conversationId = conversation.id;
+    this.conversationCreatedAt = conversation.createdAt;
+    this.conversationTitle = conversation.title;
+    this.mainMessages = conversation.mainMessages;
+    this.mainCodexThreadId = conversation.mainCodexThreadId;
+    this.threads = new Map(
+      conversation.threads.map((thread) => [thread.parentMessageId, thread]),
+    );
+    this.applyCheckpoints = [...(conversation.applyCheckpoints ?? [])];
+    this.activeThreadParentId = null;
+    this.mentions = [];
+    this.editingMessageId = null;
+    this.editingMentions = [];
+    this.collapsedMessageIds.clear();
+    if (this.inputEl) this.inputEl.value = "";
+  }
+
+  private async persistActiveConversation(): Promise<void> {
+    if (!this.hasPersistableContent()) return;
+    try {
+      const snapshot = this.snapshotConversation();
+      await this.plugin.chatHistoryService.save(snapshot);
+      this.updateSessionHeader();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice(`Could not save Kit chat: ${message}`);
+    }
+  }
+
+  private resetToWelcomeConversation(): void {
+    const now = Date.now();
+    this.conversationId = `chat-${now}`;
+    this.conversationCreatedAt = now;
+    this.conversationTitle = "New chat";
+    this.mainMessages = [createChatMessage("assistant", WELCOME_TEXT)];
+    this.mainCodexThreadId = null;
+    this.threads.clear();
+    this.applyCheckpoints = [];
+    this.activeThreadParentId = null;
+    this.mentions = [];
+    this.editingMessageId = null;
+    this.editingMentions = [];
+    this.collapsedMessageIds.clear();
+    if (this.inputEl) this.inputEl.value = "";
+  }
+
+  private async startNewChat(): Promise<void> {
+    if (this.sending) return;
+    await this.persistActiveConversation();
+    this.resetToWelcomeConversation();
+    this.updateSessionHeader();
+    this.updateThreadChrome();
+    this.renderMentions();
+    this.renderMessages();
+    this.updateActionButtons();
+    this.inputEl?.focus();
+  }
+
+  private openHistoryModal(): void {
+    if (this.sending) return;
+    void this.openHistoryModalAsync();
+  }
+
+  private async openHistoryModalAsync(): Promise<void> {
+    const items = await this.plugin.chatHistoryService.listConversations();
+    if (items.length === 0) {
+      new Notice("No saved chats yet.");
+      return;
+    }
+    const modal = new ChatHistoryModal(
+      this.app,
+      items,
+      (id) => {
+        void this.openConversation(id);
+      },
+      (id) => this.deleteConversation(id),
+    );
+    modal.open();
+  }
+
+  private async deleteConversation(id: string): Promise<void> {
+    await this.plugin.chatHistoryService.delete(id);
+    if (id === this.conversationId) {
+      this.resetToWelcomeConversation();
+      this.updateSessionHeader();
+      this.updateThreadChrome();
+      this.renderMentions();
+      this.renderMessages();
+      this.updateActionButtons();
+    }
+  }
+
+  private async openConversation(id: string): Promise<void> {
+    if (this.sending) return;
+    if (id === this.conversationId) return;
+
+    await this.persistActiveConversation();
+    const conversation = await this.plugin.chatHistoryService.load(id);
+    if (!conversation) {
+      new Notice("Could not open that chat.");
+      return;
+    }
+
+    this.hydrateConversation(conversation);
+    this.updateSessionHeader();
+    this.updateThreadChrome();
+    this.renderMentions();
+    this.renderMessages();
+    this.updateActionButtons();
+    this.inputEl?.focus();
   }
 
   private handleStop(): void {
@@ -768,6 +969,30 @@ export class KitChatView extends ItemView {
       });
       this.registerDomEvent(applyBtn, "click", () => {
         void this.handleApply(message.id);
+      });
+    }
+
+    if (
+      message.role === "assistant" &&
+      !this.sending &&
+      this.isUndoableAppliedMessage(message)
+    ) {
+      const actions = bubble.createDiv({ cls: "kit-chat__proposal-actions" });
+      const undoBtn = actions.createEl("button", {
+        text: "Undo",
+        cls: "kit-chat__undo",
+        attr: {
+          type: "button",
+          title: "Undo this Apply",
+          "aria-label": "Undo this Apply",
+        },
+      });
+      actions.createEl("span", {
+        text: "Restores vault files from before this Apply.",
+        cls: "kit-chat__proposal-hint",
+      });
+      this.registerDomEvent(undoBtn, "click", () => {
+        void this.handleUndoLastApply();
       });
     }
   }
@@ -1158,6 +1383,7 @@ export class KitChatView extends ItemView {
       this.abortController = null;
       this.updateActionButtons();
       this.renderMessages();
+      await this.persistActiveConversation();
       this.inputEl?.focus();
     }
   }
@@ -1201,7 +1427,7 @@ export class KitChatView extends ItemView {
     const startedAt = Date.now();
     const streaming = createChatMessage("assistant", "", {
       kind: "streaming",
-      statusLine: "Applying plan…",
+      statusLine: "Preparing undo snapshot…",
       mode: "edit",
       startedAt,
     });
@@ -1210,7 +1436,28 @@ export class KitChatView extends ItemView {
     this.renderMessages();
     this.startElapsedTimer();
 
+    let checkpointId: string | null = null;
+
     try {
+      try {
+        const begun = await this.plugin.applyCheckpointService.begin(
+          this.conversationId,
+        );
+        checkpointId = begun.checkpointId;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        streaming.content = `Could not prepare undo snapshot: ${message}`;
+        streaming.kind = "error";
+        streaming.statusLine = "Error";
+        this.finishTiming(streaming);
+        new Notice("Apply blocked — undo snapshot failed.");
+        return;
+      }
+
+      streaming.statusLine = "Applying plan…";
+      this.renderMessages();
+
       const result = await this.plugin.chatService.applyPlan({
         threadId: codexThreadId,
         vaultPath,
@@ -1225,6 +1472,7 @@ export class KitChatView extends ItemView {
       streaming.content = result.finalText;
       streaming.kind = "applied";
       streaming.statusLine = undefined;
+      streaming.checkpointId = checkpointId ?? undefined;
       this.finishTiming(streaming);
       proposal.kind = "normal";
       this.touchActiveThread();
@@ -1247,11 +1495,95 @@ export class KitChatView extends ItemView {
       this.touchActiveThread();
       this.renderMessages();
     } finally {
+      if (checkpointId) {
+        try {
+          const manifest = await this.plugin.applyCheckpointService.finalize(
+            this.conversationId,
+            checkpointId,
+            streaming.id,
+          );
+          if (manifest.changes.length > 0) {
+            this.applyCheckpoints.push(checkpointId);
+            streaming.checkpointId = checkpointId;
+          } else {
+            await this.plugin.applyCheckpointService.discard(
+              this.conversationId,
+              checkpointId,
+            );
+            streaming.checkpointId = undefined;
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          new Notice(`Could not finalize undo checkpoint: ${message}`);
+        }
+      }
       this.stopElapsedTimer();
       this.sending = false;
       this.abortController = null;
       this.updateActionButtons();
       this.renderMessages();
+      await this.persistActiveConversation();
+      this.inputEl?.focus();
+    }
+  }
+
+  private tipCheckpointId(): string | null {
+    if (this.applyCheckpoints.length === 0) return null;
+    return this.applyCheckpoints[this.applyCheckpoints.length - 1] ?? null;
+  }
+
+  private isUndoableAppliedMessage(message: ChatMessage): boolean {
+    const tip = this.tipCheckpointId();
+    return Boolean(tip && message.checkpointId && message.checkpointId === tip);
+  }
+
+  private async handleUndoLastApply(): Promise<void> {
+    if (this.sending) return;
+    const tip = this.tipCheckpointId();
+    if (!tip) {
+      new Notice("Nothing to undo.");
+      return;
+    }
+
+    this.sending = true;
+    this.updateActionButtons();
+    this.renderMessages();
+
+    try {
+      const result = await this.plugin.applyCheckpointService.undo(
+        this.conversationId,
+        tip,
+      );
+      this.applyCheckpoints.pop();
+
+      for (const lane of [
+        this.mainMessages,
+        ...Array.from(this.threads.values()).map((t) => t.messages),
+      ]) {
+        for (const msg of lane) {
+          if (msg.checkpointId === tip) {
+            msg.checkpointId = undefined;
+            if (msg.kind === "applied") {
+              msg.statusLine = "Undone";
+            }
+          }
+        }
+      }
+
+      const bits = [`Undid Apply (${result.restored} file${result.restored === 1 ? "" : "s"} restored)`];
+      if (result.skipped > 0) {
+        bits.push(`${result.skipped} skipped`);
+      }
+      new Notice(bits.join(" · "));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      new Notice(`Undo failed: ${message}`);
+    } finally {
+      this.sending = false;
+      this.updateActionButtons();
+      this.renderMessages();
+      await this.persistActiveConversation();
       this.inputEl?.focus();
     }
   }

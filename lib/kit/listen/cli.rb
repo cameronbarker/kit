@@ -31,7 +31,7 @@ module Kit::Listen
       when "transcribe"
         parse_transcribe_options!
         input = required_input!
-        Pipeline.new(input: input, transcripts_dir: @options[:transcripts_dir], mock: @options[:mock]).transcribe
+        run_transcribe(input)
       when "render"
         parse_render_options!
         input = required_input!
@@ -126,6 +126,7 @@ module Kit::Listen
     def parse_transcribe_options!
       parse_options!("Usage: kit listen transcribe [options] INPUT") do |opts|
         opts.on("--mock", "Use mock Python worker output (no ML)") { @options[:mock] = true }
+        opts.on("--json", "Emit machine-readable JSON") { @options[:json] = true }
         add_transcripts_dir_option!(opts, "Output root (default: transcripts/)")
       end
     end
@@ -237,6 +238,30 @@ module Kit::Listen
         puts "latest=(none)"
       end
       0
+    end
+
+    def run_transcribe(input)
+      pipeline = Pipeline.new(
+        input: input,
+        transcripts_dir: @options[:transcripts_dir],
+        mock: @options[:mock],
+        quiet: @options[:json]
+      )
+      status = pipeline.transcribe
+      if @options[:json]
+        puts JSON.pretty_generate(
+          {
+            "ok" => true,
+            "action" => "transcribe",
+            "input" => pipeline.input_path,
+            "raw_json" => pipeline.raw_json_path,
+            "transcript_json" => pipeline.final_json_path,
+            "transcript_md" => pipeline.markdown_path,
+            "speaker_map" => pipeline.speaker_map_path
+          }
+        )
+      end
+      status
     end
 
     def run_stop
@@ -352,7 +377,8 @@ module Kit::Listen
           status [--json]             Show recording lifecycle state
           latest [--json]             Show newest recording metadata
           stop [--json]               Stop the active recorder process
-          transcribe [--mock] INPUT   Transcribe a meeting audio/video file
+          transcribe [--mock] [--json] INPUT
+                                      Transcribe a meeting audio/video file
           render INPUT                Re-render Markdown/JSON from existing raw JSON
           speakers [options] INPUT    Show transcript speaker labels and samples
           rename-speaker INPUT RAW NAME
@@ -373,7 +399,7 @@ module Kit::Listen
           --transcripts-dir DIR       Used with --transcribe
 
         Control options:
-          --json                      Machine-readable JSON for status/latest/stop
+          --json                      Machine-readable JSON for status/latest/stop/transcribe
           --detach                    Start recording and return immediately
           --mock                      Use mock Python worker when command transcribes
           --dry-run                   Placeholder chunk behavior where supported

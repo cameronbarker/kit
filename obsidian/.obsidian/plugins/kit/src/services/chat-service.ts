@@ -18,7 +18,13 @@ export function createChatMessage(
   extras?: Partial<
     Pick<
       ChatMessage,
-      "kind" | "statusLine" | "mode" | "startedAt" | "durationMs" | "mentions"
+      | "kind"
+      | "statusLine"
+      | "mode"
+      | "startedAt"
+      | "durationMs"
+      | "mentions"
+      | "checkpointId"
     >
   >,
 ): ChatMessage {

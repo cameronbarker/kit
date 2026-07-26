@@ -17,8 +17,18 @@ module Kit
           "command" => ["kit", "followup", "--overdue", "--json"],
           "implemented" => true
         },
+        "needs_review" => {
+          "label" => "Needs review",
+          "command" => ["kit", "surface", "--needs-review-only", "--json"],
+          "implemented" => true
+        },
+        "waiting_on_me" => {
+          "label" => "Waiting on me",
+          "command" => ["kit", "followup", "--waiting-on-me", "--json"],
+          "implemented" => true
+        },
         "today_surface" => {
-          "label" => "Open today's surface",
+          "label" => "Today's Surface",
           "command" => ["kit", "surface"],
           "implemented" => true
         },
@@ -48,7 +58,7 @@ module Kit
           "implemented" => false
         },
         "brief" => {
-          "label" => "Run brief",
+          "label" => "Weekly Brief",
           "command" => ["kit", "brief", "--json"],
           "implemented" => true
         },
@@ -87,8 +97,8 @@ module Kit
 
       def health
         {
-          "indicator" => "setup",
-          "message" => "Kit menu bar bridge is available; most attention commands are planned."
+          "indicator" => "ok",
+          "message" => "Ready: review, follow up, or capture."
         }
       end
 
@@ -102,7 +112,9 @@ module Kit
             ["kit", "notice", "--json"],
             ["kit", "remember", "--json"],
             ["kit", "surface", "--json"],
+            ["kit", "surface", "--needs-review-only", "--json"],
             ["kit", "followup", "--overdue", "--json"],
+            ["kit", "followup", "--waiting-on-me", "--json"],
             ["kit", "prepare", "--next", "--json"],
             ["kit", "brief", "--json"],
             ["kit", "reflect", "--json"]

@@ -18,18 +18,25 @@ class KitAppBridgeStatusTest < Minitest::Test
     assert_equal 1, status["schema_version"]
     assert_equal "0.1.0", status["kit_version"]
     assert_equal "2026-07-18T12:00:00Z", status["generated_at"]
-    assert_equal "setup", status.dig("health", "indicator")
+    assert_equal "ok", status.dig("health", "indicator")
+    assert_equal "Ready: review, follow up, or capture.", status.dig("health", "message")
     assert_equal "cli_json", status.dig("integration", "mode")
     assert_equal ["/usr/bin/ruby", "/repo/bin/kit"], status.dig("integration", "kit_command")
     assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "status", "--json"]
     assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "notice", "--json"]
     assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "remember", "--json"]
+    assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "surface", "--needs-review-only", "--json"]
     assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "followup", "--overdue", "--json"]
+    assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "followup", "--waiting-on-me", "--json"]
     assert_includes status.dig("integration", "stable_entrypoints"), ["kit", "reflect", "--json"]
     assert_equal ["kit", "surface", "--json"], status.dig("commands", "open_loops", "command")
     assert_equal true, status.dig("commands", "open_loops", "implemented")
     assert_equal ["kit", "followup", "--overdue", "--json"], status.dig("commands", "overdue_commitments", "command")
     assert_equal true, status.dig("commands", "overdue_commitments", "implemented")
+    assert_equal ["kit", "surface", "--needs-review-only", "--json"], status.dig("commands", "needs_review", "command")
+    assert_equal true, status.dig("commands", "needs_review", "implemented")
+    assert_equal ["kit", "followup", "--waiting-on-me", "--json"], status.dig("commands", "waiting_on_me", "command")
+    assert_equal true, status.dig("commands", "waiting_on_me", "implemented")
     assert_equal ["kit", "brief", "--json"], status.dig("commands", "brief", "command")
     assert_equal true, status.dig("commands", "brief", "implemented")
     assert_equal ["kit", "reflect", "--json"], status.dig("commands", "reflect", "command")

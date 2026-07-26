@@ -20,7 +20,8 @@ module Kit::Prepare
         vault: ENV["KIT_VAULT"],
         me: ENV["KIT_ME"],
         person: nil,
-        next: false
+        next: false,
+        ai: false
       }
     end
 
@@ -29,7 +30,7 @@ module Kit::Prepare
       return run_next if @options[:next]
 
       person = resolve_person
-      payload = Pack.new(vault_dir: resolve_vault, person: person, me: @options[:me]).write
+      payload = Pack.new(vault_dir: resolve_vault, person: person, me: @options[:me], ai: @options[:ai]).write
 
       if @options[:json]
         @out.puts JSON.pretty_generate(payload)
@@ -55,6 +56,7 @@ module Kit::Prepare
         opts.separator ""
         opts.separator "Options:"
         opts.on("--person NAME", "Person to prepare for") { |name| @options[:person] = name }
+        opts.on("--ai", "Add opt-in draft AI talking points") { @options[:ai] = true }
         opts.on("--next", "Reserved for next-meeting prep; not implemented in v1") { @options[:next] = true }
         opts.on("--json", "Emit machine-readable JSON") { @options[:json] = true }
         opts.on("--vault DIR", "Durable notes root (default: KIT_VAULT or obsidian/)") do |dir|

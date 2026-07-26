@@ -56,6 +56,17 @@ class Kit::BriefCLITest < Minitest::Test
     assert_includes File.read(payload["artifact_path"]), "Stakeholder update draft"
   end
 
+  def test_brief_ai_adds_draft_section
+    result = run_kit("brief", "--json", "--ai", "--me", "Cameron", env: { "KIT_AI_PROVIDER" => "mock" })
+
+    assert_equal 0, result[:status], result[:stderr]
+    payload = JSON.parse(result[:stdout])
+    assert_equal "mock", payload.dig("ai_draft", "provider")
+    assert_equal "draft", payload.dig("ai_draft", "status")
+    assert_includes payload.dig("ai_draft", "bullets", 0, "text"), "Draft:"
+    assert_includes File.read(payload["artifact_path"]), "AI Draft Brief Bullets"
+  end
+
   def test_human_output_includes_artifact_and_sections
     result = run_kit("brief", "--me", "Cameron")
 

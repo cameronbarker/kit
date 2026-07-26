@@ -56,6 +56,44 @@ class Kit::NoticeCLITest < Minitest::Test
     assert File.file?(payload.dig("outputs", "json"))
   end
 
+  def test_notice_without_ai_keeps_existing_payload_unenriched
+    path = File.join(@transcripts_dir, "json", "platform-sync.json")
+    result = run_kit("notice", "--json", "--me", "Cameron", path)
+
+    assert_equal 0, result[:status], result[:stderr]
+    payload = JSON.parse(result[:stdout])
+    refute payload.key?("enrichment")
+    assert payload["items"].all? { |item| !item.key?("enrichment") }
+  end
+
+  def test_notice_ai_json_adds_mock_draft_without_retrieval
+    path = File.join(@transcripts_dir, "json", "platform-sync.json")
+    result = run_kit("notice", "--json", "--ai", "--no-retrieval", "--me", "Cameron", path, env: { "KIT_AI_PROVIDER" => "mock" })
+
+    assert_equal 0, result[:status], result[:stderr]
+    payload = JSON.parse(result[:stdout])
+    assert_equal true, payload.dig("enrichment", "enabled")
+    assert_equal "mock", payload.dig("enrichment", "provider")
+    assert_equal false, payload.dig("enrichment", "retrieval", "available")
+    assert_equal 2, payload.dig("enrichment", "counts", "deterministic_items")
+    assert_equal 1, payload.dig("enrichment", "counts", "ai_items")
+    ai_item = payload["items"].find { |item| item["enrichment"] == "ai" }
+    assert_equal "possible", ai_item["status"]
+    assert_includes ai_item["text"], "AI draft:"
+    assert_equal [ai_item["citation"]], ai_item["citations"]
+    markdown = File.read(payload.dig("outputs", "md"))
+    assert_includes markdown, "[AI draft]"
+  end
+
+  def test_notice_ai_reports_unsupported_provider
+    path = File.join(@transcripts_dir, "json", "platform-sync.json")
+    result = run_kit("notice", "--json", "--ai", "--me", "Cameron", path, env: { "KIT_AI_PROVIDER" => "network" })
+
+    assert_equal 1, result[:status]
+    assert_empty result[:stdout]
+    assert_includes result[:stderr], "unsupported KIT_AI_PROVIDER"
+  end
+
   def test_notice_defaults_to_latest
     write_transcript("newer", title: "Newer")
     newer = File.join(@transcripts_dir, "json", "newer.json")

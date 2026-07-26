@@ -1,0 +1,12 @@
+{
+  "results": [
+    {
+      "file": "test/fixtures/qmd_corpus/transcripts/platform-sync.md",
+      "id": "platform-sync#priya",
+      "collection_name": "transcripts",
+      "rank_score": "0.64",
+      "heading": "Platform Sync",
+      "excerpt": "Priya asked for a follow-up on API proposal timing."
+    }
+  ]
+}

@@ -24,16 +24,21 @@ bin/kit version
 bin/kit listen help
 bin/kit listen status --json
 bin/kit notice --me "Cameron" latest
+bin/kit notice --json --ai --no-retrieval --me "Cameron" latest
 bin/kit notice --json --me "Cameron" transcripts/json/platform-sync.json
 bin/kit remember --vault obsidian latest
 bin/kit remember --json --dry-run latest
 bin/kit surface --vault obsidian
 bin/kit surface --json
 bin/kit prepare --person "Priya" --vault obsidian
+bin/kit prepare --person "Priya" --ai --json
 bin/kit prepare "Priya" --json
 bin/kit brief --vault obsidian
+bin/kit brief --ai --json
 bin/kit followup --me "Cameron"
 bin/kit reflect --json
+bin/kit qmd status
+bin/kit qmd query "Priya API proposal" --json --collection transcripts --limit 5
 bin/kit status --json
 bin/kit notify "Review open commitments"
 bin/kit menubar
@@ -70,13 +75,15 @@ qmd         Manage/search the local qmd index
 
 The `listen` command is implemented as a local recording and transcription pipeline. It can list ffmpeg audio devices, run chunked background recording sessions, pause/resume/stop an active session, track recording state, show the latest recording metadata, transcribe an existing audio/video file, and re-render transcript artifacts from raw JSON. The older foreground `record` command remains available.
 
-The `notice` command reads normalized transcript JSON from `kit listen` and writes review-required extracts of possible commitments, decisions, and open loops. It is deterministic and offline in this first version; no LLM, network, or external Ruby gem is required. Pass `--me NAME` or set `KIT_ME` to classify first-person commitments as yours. Without an identity, `notice` still runs but marks commitment perspective for human review instead of guessing.
+The `notice` command reads normalized transcript JSON from `kit listen` and writes review-required extracts of possible commitments, decisions, and open loops. The default path is deterministic and offline; no LLM, network, or external Ruby gem is required. Pass `--me NAME` or set `KIT_ME` to classify first-person commitments as yours. Without an identity, `notice` still runs but marks commitment perspective for human review instead of guessing. Optional `--ai` enrichment uses a pluggable provider and keeps all AI items as possible/review-required drafts.
 
 The `remember` command reads notice extract JSON and upserts possible commitments, decisions, and open loops into durable Markdown notes. It preserves review-required status and citations rather than promoting possible items into trusted facts. By default it writes into the ignored repo-local `obsidian/` notes area; pass `--vault DIR` or set `KIT_VAULT` to target another vault.
 
 The `surface` command reads Kit-managed durable notes and shows the daily attention list. It uses Obsidian checkbox state as the current completion source of truth and keeps possible or unknown-perspective items in a needs-review lane instead of treating them as trusted. By default it reads from the ignored repo-local `obsidian/` notes area; pass `--vault DIR` or set `KIT_VAULT` to target another durable notes root.
 
 The `reflect` command writes a weekly reflection artifact from Kit-managed durable notes and filename-only weekly brief history. It is deterministic in v1: no LLM coaching, no people scoring, no calendar analytics, and no freeform note scraping.
+
+The `qmd` command wraps the local `qmd` CLI for optional retrieval over transcripts, extracts, and vault notes. It uses subprocess calls and JSON contracts rather than vendoring qmd internals. If `qmd` is missing, Kit reports a clear error and deterministic commands continue to work.
 
 The `notify` command is implemented as a small macOS notification utility backed by `terminal-notifier` and uses `assets/kit-icon.png` as its notification app icon. The `status --json` command exposes a stable app bridge contract for future non-CLI surfaces. The `menubar` command launches the thin Swift helper in `mac/menubar/` against this checkout's `bin/kit`. Remaining planned commands currently return an intentional "not implemented yet" message.
 
@@ -89,6 +96,17 @@ Current bridge:
 ```bash
 bin/kit status --json
 ```
+
+Future plugin views can also consume these stable JSON entrypoints:
+
+```bash
+bin/kit qmd query "search terms" --json
+bin/kit notice --ai --json latest
+bin/kit prepare --person "Priya" --ai --json
+bin/kit brief --ai --json
+```
+
+These payloads expose retrieval hits used for a turn, deterministic items vs AI drafts, and review-required item status. Accept/reject remains owned by `kit remember`; the plugin should not promote AI drafts directly.
 
 The Ruby bridge lives in `lib/kit/app_bridge/`. A native macOS menu bar scaffold lives in `mac/menubar/` and documents how a future helper should integrate with Kit core commands.
 
@@ -171,6 +189,8 @@ Common commands:
 bin/kit notice --me "Cameron" latest
 bin/kit notice --me "Cameron" platform-sync
 bin/kit notice --json --me "Cameron" transcripts/json/platform-sync.json
+KIT_AI_PROVIDER=mock bin/kit notice --json --ai --no-retrieval --me "Cameron" latest
+KIT_AI_PROVIDER=mock bin/kit notice --json --ai --collection transcripts --limit 5 --me "Cameron" latest
 bin/kit notice --transcripts-dir transcripts --extracts-dir extracts platform-sync
 ```
 
@@ -181,7 +201,45 @@ extracts/json/<slug>.notice.json
 extracts/md/<slug>.notice.md
 ```
 
-Each extracted item includes source citation details back to the transcript segment, including speaker, raw speaker, timestamp, and quote. Human review remains required; `remember` preserves possible/review-required labels in durable notes.
+Each extracted item includes source citation details back to the transcript segment, including speaker, raw speaker, timestamp, and quote. Human review remains required; `remember` preserves possible/review-required labels in durable notes. With `--ai`, JSON output adds an `enrichment` object containing provider name, retrieval availability, retrieval hits, warnings, and deterministic-vs-AI counts. AI items include `enrichment: "ai"`, `citations`, and optional `retrieval_refs`; they remain `status: "possible"`.
+
+## QMD Retrieval
+
+Kit integrates with real local qmd through subprocess commands. Install qmd separately and make sure `qmd` is on `PATH`, or set `KIT_QMD_BINARY` to an executable path.
+
+Common commands:
+
+```bash
+bin/kit qmd status
+bin/kit qmd status --json
+bin/kit qmd setup
+bin/kit qmd update
+bin/kit qmd query "Priya API proposal" --json --collection transcripts --limit 5
+bin/kit qmd search "migration comms" --json
+```
+
+Default collections are added for existing directories:
+
+```text
+transcripts -> transcripts/md
+extracts    -> extracts/md
+vault       -> KIT_VAULT or obsidian/
+```
+
+Use `KIT_QMD_INDEX` to choose a qmd index name. Keep qmd indexes, sqlite files, embedding caches, and model caches outside git; repo-local `.cache/`, `transcripts/`, `extracts/`, and vault notes are ignored.
+
+## AI Enrichment
+
+AI is opt-in through `--ai`. When an AI flag is used, Kit selects `KIT_AI_PROVIDER` when set and otherwise uses the safe local `mock` provider. Library callers that ask for `Kit::AI.provider` directly default to `off`. The Mock provider is deterministic, requires no network, and returns structured JSON drafts for notice items, prepare talking points, and brief bullets.
+
+Supported providers in this version:
+
+```text
+off
+mock
+```
+
+There is no cloud LLM provider in this change. Unsupported provider names fail clearly. AI enrichment never auto-accepts facts, never changes Obsidian checkbox state, and does not perform people scoring or performance judgment.
 
 ## Remember
 
@@ -246,6 +304,7 @@ Common commands:
 bin/kit prepare --person "Priya"
 bin/kit prepare "Priya"
 bin/kit prepare --person "Priya" --json
+KIT_AI_PROVIDER=mock bin/kit prepare --person "Priya" --ai --json
 bin/kit prepare --person "Priya" --me "Cameron"
 ```
 
@@ -255,7 +314,22 @@ Prepare v1 writes:
 1-1s/<Person> Prep.md
 ```
 
-It matches the person case-insensitively against managed item owner, speaker, text, quote, and source fields. Open accepted/trusted/confirmed/actionable items are grouped into commitments, open loops, and recent related decisions. Possible or uncertain items are kept in a separate needs-review section and are not treated as confirmed facts. Completed checkbox items and rejected items are ignored. `kit prepare --next` is reserved for future calendar-backed next-meeting prep and currently returns a clear unimplemented response.
+It matches the person case-insensitively against managed item owner, speaker, text, quote, and source fields. Open accepted/trusted/confirmed/actionable items are grouped into commitments, open loops, and recent related decisions. Possible or uncertain items are kept in a separate needs-review section and are not treated as confirmed facts. Completed checkbox items and rejected items are ignored. `--ai` adds draft talking points under `ai_draft` and a clearly labeled Markdown section; it does not mutate trusted items. `kit prepare --next` is reserved for future calendar-backed next-meeting prep and currently returns a clear unimplemented response.
+
+## Brief
+
+`kit brief` writes a thin weekly leadership brief from Kit-managed durable notes. Vault home means the durable notes root: by default this is repo-local `obsidian/`, and it can be overridden with `--vault DIR` or `KIT_VAULT`.
+
+Common commands:
+
+```bash
+bin/kit brief
+bin/kit brief --vault obsidian
+bin/kit brief --json
+KIT_AI_PROVIDER=mock bin/kit brief --ai --json
+```
+
+`--ai` adds draft brief bullets under `ai_draft` and a clearly labeled Markdown section. It does not replace deterministic sections or promote possible items to trusted facts.
 
 ## Reflect
 
@@ -287,6 +361,12 @@ ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |path| require File.expand_
 ```
 
 No external Ruby gems are required. Automated tests do not send real notifications and use mock transcription rather than real ML.
+
+The normal suite does not require live qmd. Recorded qmd-shaped fixtures live under `test/fixtures/qmd/`, with a tiny sample corpus under `test/fixtures/qmd_corpus/`. Regenerate fixtures manually from a machine with qmd configured by querying that corpus with `qmd query ... --json` or `qmd search ... --json` and replacing the matching fixture file. To run the optional live smoke test:
+
+```bash
+KIT_QMD_LIVE=1 ruby -Itest test/kit/qmd_live_test.rb
+```
 
 ## License
 

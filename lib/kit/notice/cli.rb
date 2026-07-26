@@ -15,6 +15,12 @@ module Kit::Notice
       @err = err
       @options = {
         json: false,
+        ai: false,
+        retrieval: true,
+        retrieval_query: nil,
+        retrieval_mode: "query",
+        collection: nil,
+        limit: 5,
         me: ENV["KIT_ME"],
         transcripts_dir: DEFAULT_TRANSCRIPTS_DIR,
         extracts_dir: DEFAULT_EXTRACTS_DIR,
@@ -30,6 +36,7 @@ module Kit::Notice
       transcript_path = resolve_input(input)
       payload = load_transcript(transcript_path)
       extract = Extractor.new(payload: payload, transcript_path: transcript_path, me: @options[:me]).extract
+      extract = enrich(extract, payload) if @options[:ai]
       result = Artifacts.new(payload: extract, extracts_dir: @options[:extracts_dir], out_path: @options[:out]).write!
 
       if @options[:json]
@@ -55,6 +62,12 @@ module Kit::Notice
       parser = OptionParser.new do |opts|
         opts.banner = "Usage: kit notice [options] [INPUT]"
         opts.on("--json", "Emit machine-readable JSON") { @options[:json] = true }
+        opts.on("--ai", "Add opt-in AI enrichment (defaults to mock unless KIT_AI_PROVIDER is set)") { @options[:ai] = true }
+        opts.on("--retrieval QUERY", "Override retrieval query/context") { |query| @options[:retrieval_query] = query }
+        opts.on("--no-retrieval", "Run AI enrichment without qmd retrieval") { @options[:retrieval] = false }
+        opts.on("--retrieval-mode MODE", "qmd retrieval mode: query or search") { |mode| @options[:retrieval_mode] = mode }
+        opts.on("--collection NAME", "Restrict qmd retrieval to collection") { |name| @options[:collection] = name }
+        opts.on("--limit N", Integer, "Maximum retrieval hits") { |limit| @options[:limit] = limit }
         opts.on("--me NAME", "Speaker name that represents you") { |name| @options[:me] = name }
         opts.on("--transcripts-dir DIR", "Transcript root (default: transcripts/)") do |dir|
           @options[:transcripts_dir] = File.expand_path(dir)
@@ -71,6 +84,25 @@ module Kit::Notice
       parser.parse!(@argv)
       @options[:me] = @options[:me].to_s.strip
       @options[:me] = nil if @options[:me].empty?
+    end
+
+    def enrich(extract, payload)
+      provider = Kit::AI.provider(ENV.fetch("KIT_AI_PROVIDER", "mock"))
+      retrieval = Kit::Retrieval.new(
+        mode: @options[:retrieval_mode],
+        collection: @options[:collection],
+        limit: @options[:limit]
+      )
+      Enrichment.new(
+        extract: extract,
+        transcript: payload,
+        provider: provider,
+        retrieval: retrieval,
+        retrieval_enabled: @options[:retrieval],
+        retrieval_query: @options[:retrieval_query]
+      ).apply
+    rescue Kit::AI::Error => e
+      raise Error, e.message
     end
 
     def resolve_input(input)

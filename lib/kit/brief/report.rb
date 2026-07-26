@@ -5,14 +5,15 @@ require "time"
 
 module Kit::Brief
   class Report
-    attr_reader :vault_dir, :me, :now
+    attr_reader :vault_dir, :me, :now, :ai
 
-    def initialize(vault_dir:, items:, warnings:, me: nil, now: Time.now)
+    def initialize(vault_dir:, items:, warnings:, me: nil, now: Time.now, ai: false)
       @vault_dir = File.expand_path(vault_dir)
       @items = items
       @warnings = warnings
       @me = clean(me)
       @now = now
+      @ai = ai
     end
 
     def write
@@ -26,7 +27,7 @@ module Kit::Brief
       normalized = normalized_items
       sections = build_sections(normalized)
 
-      {
+      payload = {
         "schema_version" => 1,
         "kind" => "kit_brief",
         "generated_at" => now.utc.iso8601,
@@ -40,6 +41,7 @@ module Kit::Brief
         "items" => normalized,
         "warnings" => warnings
       }
+      ai ? payload.merge("ai_draft" => ai_draft(normalized)) : payload
     end
 
     private
@@ -159,9 +161,36 @@ module Kit::Brief
       render_text_section(lines, "People support signals", ["Insufficient signal in v1."])
       render_item_section(lines, "Needs review", payload.dig("sections", "needs_review"), review: true)
       render_text_section(lines, "Stakeholder update draft", payload.dig("sections", "stakeholder_update_draft"))
+      render_ai_draft(lines, payload["ai_draft"])
       render_actions(lines, payload.dig("sections", "recommended_next_actions"))
       render_warnings(lines, payload["warnings"])
       lines.join("\n") + "\n"
+    end
+
+    def ai_draft(items)
+      query = ["weekly brief", me].compact.join(" ")
+      retrieval = Kit::Retrieval.new(limit: 5).retrieve(query)
+      provider = Kit::AI.provider(ENV.fetch("KIT_AI_PROVIDER", "mock"))
+      draft = provider.brief_draft_bullets(items: items, retrieval_hits: retrieval.fetch("hits", []))
+      {
+        "provider" => provider.name,
+        "status" => "draft",
+        "retrieval" => retrieval,
+        "bullets" => Array(draft["bullets"]),
+        "warnings" => Array(draft["warnings"]) + Array(retrieval["warnings"])
+      }
+    end
+
+    def render_ai_draft(lines, draft)
+      return unless draft
+
+      lines << "## AI Draft Brief Bullets"
+      lines << ""
+      Array(draft["bullets"]).each do |bullet|
+        lines << "- [draft] #{bullet['text']}"
+      end
+      lines << "- None found." if Array(draft["bullets"]).empty?
+      lines << ""
     end
 
     def render_item_section(lines, title, items, review: false)

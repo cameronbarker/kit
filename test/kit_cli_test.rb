@@ -97,6 +97,24 @@ class KitCLITest < Minitest::Test
     assert_empty result[:stderr]
   end
 
+  def test_qmd_is_implemented_command
+    result = run_kit("qmd", "--help")
+
+    assert_equal 0, result[:status]
+    assert_includes result[:stdout], "Usage: kit qmd COMMAND"
+    assert_empty result[:stderr]
+  end
+
+  def test_qmd_missing_binary_returns_clear_json_error
+    result = run_kit("qmd", "status", "--json", env: { "KIT_QMD_BINARY" => "/missing/qmd" })
+
+    assert_equal 1, result[:status]
+    assert_empty result[:stderr]
+    payload = JSON.parse(result[:stdout])
+    assert_equal "kit_qmd_error", payload["kind"]
+    assert_includes payload["error"], "qmd binary not found"
+  end
+
   def test_notify_requires_message
     result = run_kit("notify")
 

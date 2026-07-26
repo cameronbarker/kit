@@ -5,13 +5,14 @@ require "time"
 
 module Kit::Prepare
   class Pack
-    attr_reader :vault_dir, :person, :me, :now
+    attr_reader :vault_dir, :person, :me, :now, :ai
 
-    def initialize(vault_dir:, person:, me: nil, now: Time.now)
+    def initialize(vault_dir:, person:, me: nil, now: Time.now, ai: false)
       @vault_dir = File.expand_path(vault_dir)
       @person = clean(person)
       @me = clean(me)
       @now = now
+      @ai = ai
       raise Error, "missing person" if @person.nil?
     end
 
@@ -27,7 +28,7 @@ module Kit::Prepare
       items = matched_items(parsed.fetch("items"))
       sections = build_sections(items)
 
-      {
+      payload = {
         "schema_version" => 1,
         "kind" => "kit_prepare",
         "generated_at" => now.utc.iso8601,
@@ -42,6 +43,7 @@ module Kit::Prepare
         "items" => items,
         "warnings" => parsed.fetch("warnings")
       }
+      ai ? payload.merge("ai_draft" => ai_draft(items)) : payload
     end
 
     private
@@ -114,8 +116,34 @@ module Kit::Prepare
       render_markdown_section(lines, "Open Loops", payload.dig("sections", "open_loops"))
       render_markdown_section(lines, "Recent Related Decisions", payload.dig("sections", "recent_decisions"))
       render_markdown_section(lines, "Needs Review", payload.dig("sections", "needs_review"), review: true)
+      render_ai_draft(lines, payload["ai_draft"])
       render_warnings(lines, payload["warnings"])
       lines.join("\n") + "\n"
+    end
+
+    def ai_draft(items)
+      retrieval = Kit::Retrieval.new(limit: 5).retrieve(person)
+      provider = Kit::AI.provider(ENV.fetch("KIT_AI_PROVIDER", "mock"))
+      draft = provider.prepare_talking_points(person: person, items: items, retrieval_hits: retrieval.fetch("hits", []))
+      {
+        "provider" => provider.name,
+        "status" => "draft",
+        "retrieval" => retrieval,
+        "talking_points" => Array(draft["talking_points"]),
+        "warnings" => Array(draft["warnings"]) + Array(retrieval["warnings"])
+      }
+    end
+
+    def render_ai_draft(lines, draft)
+      return unless draft
+
+      lines << "## AI Draft Talking Points"
+      lines << ""
+      Array(draft["talking_points"]).each do |point|
+        lines << "- [draft] #{point['text']}"
+      end
+      lines << "- None found." if Array(draft["talking_points"]).empty?
+      lines << ""
     end
 
     def render_markdown_section(lines, title, items, review: false)

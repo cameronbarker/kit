@@ -61,6 +61,7 @@ module Kit::Notice
       lines << "Generated: #{result['generated_at']}"
       lines << "Review required: yes"
       result.fetch("warnings", []).each { |warning| lines << "Warning: #{warning}" }
+      result.dig("enrichment", "warnings").to_a.each { |warning| lines << "Enrichment warning: #{warning}" }
       lines << ""
 
       section(lines, "Commitments I Made", result, "commitments_i_made", checkbox: true)
@@ -81,7 +82,8 @@ module Kit::Notice
       else
         items.each do |item|
           marker = checkbox ? "- [ ]" : "-"
-          lines << "#{marker} #{item['text']} #{metadata(item)}"
+          prefix = item["enrichment"] == "ai" ? "[AI draft] " : ""
+          lines << "#{marker} #{prefix}#{item['text']} #{metadata(item)}"
         end
       end
       lines << ""

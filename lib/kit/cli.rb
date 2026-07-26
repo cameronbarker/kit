@@ -4,9 +4,7 @@ require "json"
 
 module Kit
   class CLI
-    PLANNED_COMMANDS = {
-      "qmd" => "Manage/search the local qmd index"
-    }.freeze
+    PLANNED_COMMANDS = {}.freeze
 
     IMPLEMENTED_COMMANDS = {
       "listen" => "Record and transcribe conversations",
@@ -17,6 +15,7 @@ module Kit
       "followup" => "Track promises, waiting-on items, and stale loops",
       "brief" => "Draft leadership and stakeholder updates",
       "reflect" => "Review patterns over time",
+      "qmd" => "Manage/search the local qmd index",
       "notify" => "Send a simple local Kit notification",
       "status" => "Show machine-readable Kit app bridge status",
       "menubar" => "Start the macOS Kit menu bar helper"
@@ -64,6 +63,8 @@ module Kit
         Brief::CLI.run(@argv)
       when "reflect"
         Reflect::CLI.run(@argv)
+      when "qmd"
+        Qmd::CLI.run(@argv)
       when *PLANNED_COMMANDS.keys
         print_planned(command)
         2

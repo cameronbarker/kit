@@ -11,5 +11,6 @@ module Kit
 end
 
 require_relative "notice/extractor"
+require_relative "notice/enrichment"
 require_relative "notice/artifacts"
 require_relative "notice/cli"

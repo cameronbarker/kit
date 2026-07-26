@@ -10,6 +10,9 @@ require_relative "kit/env"
 Kit::Env.load!
 
 require_relative "kit/notifications"
+require_relative "kit/qmd"
+require_relative "kit/retrieval"
+require_relative "kit/ai"
 require_relative "kit/listen"
 require_relative "kit/notice"
 require_relative "kit/remember"

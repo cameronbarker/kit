@@ -52,6 +52,17 @@ class Kit::PrepareCLITest < Minitest::Test
     assert_includes File.read(payload["artifact_path"]), "# Prep: Priya"
   end
 
+  def test_prepare_ai_adds_draft_section
+    result = run_kit("prepare", "--person", "Priya", "--json", "--ai", "--me", "Cameron", env: { "KIT_AI_PROVIDER" => "mock" })
+
+    assert_equal 0, result[:status], result[:stderr]
+    payload = JSON.parse(result[:stdout])
+    assert_equal "mock", payload.dig("ai_draft", "provider")
+    assert_equal "draft", payload.dig("ai_draft", "status")
+    assert_includes payload.dig("ai_draft", "talking_points", 0, "text"), "Draft:"
+    assert_includes File.read(payload["artifact_path"]), "AI Draft Talking Points"
+  end
+
   def test_prepare_accepts_positional_person
     result = run_kit("prepare", "priya")
 

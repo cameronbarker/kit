@@ -1,0 +1,20 @@
+[
+  {
+    "path": "test/fixtures/qmd_corpus/transcripts/platform-sync.md",
+    "docid": "platform-sync",
+    "collection": "transcripts",
+    "score": 0.87,
+    "title": "Platform Sync",
+    "snippet": "Cameron will follow up with Priya about the API proposal.",
+    "context": "Meeting transcript about API proposal follow-up and migration comms."
+  },
+  {
+    "path": "test/fixtures/qmd_corpus/extracts/platform-sync.notice.md",
+    "docid": "platform-sync-notice",
+    "collection": "extracts",
+    "score": 0.73,
+    "title": "Notice: Platform Sync",
+    "snippet": "Priya will update the API proposal.",
+    "context": "Notice extract with possible commitments."
+  }
+]

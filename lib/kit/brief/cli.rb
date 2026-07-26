@@ -16,7 +16,8 @@ module Kit::Brief
       @options = {
         json: false,
         vault: ENV["KIT_VAULT"],
-        me: ENV["KIT_ME"]
+        me: ENV["KIT_ME"],
+        ai: false
       }
     end
 
@@ -30,7 +31,8 @@ module Kit::Brief
         vault_dir: vault,
         items: parsed.fetch("items"),
         warnings: parsed.fetch("warnings"),
-        me: @options[:me]
+        me: @options[:me],
+        ai: @options[:ai]
       ).write
 
       if @options[:json]
@@ -57,6 +59,7 @@ module Kit::Brief
         opts.separator ""
         opts.separator "Options:"
         opts.on("--json", "Emit machine-readable JSON") { @options[:json] = true }
+        opts.on("--ai", "Add opt-in draft AI brief bullets") { @options[:ai] = true }
         opts.on("--vault DIR", "Durable notes root (default: KIT_VAULT or obsidian/)") do |dir|
           @options[:vault] = dir
         end
@@ -93,6 +96,7 @@ module Kit::Brief
       render_section("Needs review", payload.dig("sections", "needs_review"), review: true)
       render_actions(payload.dig("sections", "recommended_next_actions"))
       render_text("Stakeholder update draft", payload.dig("sections", "stakeholder_update_draft"))
+      render_ai_draft(payload["ai_draft"])
       render_text("What changed since last week", payload.dig("sections", "insufficient_history"))
       render_text("Insufficient signal", payload.dig("sections", "insufficient_signal"))
 
@@ -131,6 +135,12 @@ module Kit::Brief
       @out.puts "#{title}:"
       values.each { |value| @out.puts "  - #{value}" }
       @out.puts
+    end
+
+    def render_ai_draft(draft)
+      return unless draft
+
+      render_text("AI draft brief bullets", Array(draft["bullets"]).map { |bullet| bullet["text"] })
     end
 
     def open_count(counts)
